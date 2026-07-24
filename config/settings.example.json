@@ -1,7 +1,17 @@
 {
-  "spotify": {"client_id": "", "redirect_uri": "http://127.0.0.1:8888/callback"},
-  "lastfm": {"api_key": ""},
-  "discogs": {"token": ""},
+  "spotify": {
+    "client_id": "",
+    "redirect_uri": "http://127.0.0.1:8888/callback"
+  },
+  "app": {
+    "oauth_state_secret": ""
+  },
+  "lastfm": {
+    "api_key": ""
+  },
+  "discogs": {
+    "token": ""
+  },
   "preferences": {
     "playlist_name": "DPC DJ Set",
     "public_playlist": false,

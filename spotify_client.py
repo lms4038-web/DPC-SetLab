@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import http.server
 import json
 import re
@@ -67,10 +68,40 @@ def _pkce_pair() -> tuple[str, str]:
 
 
 
-def build_web_authorization(client_id: str, redirect_uri: str) -> dict[str, str]:
-    """Create a Spotify Authorization Code + PKCE request for a hosted web app."""
+def _b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode((value + padding).encode("ascii"))
+
+
+def _state_key(secret: str) -> bytes:
+    value = str(secret or "").strip()
+    if len(value) < 24:
+        raise ValueError("OAuth state secret은 24자 이상이어야 합니다.")
+    return value.encode("utf-8")
+
+
+def build_web_authorization(client_id: str, redirect_uri: str, state_secret: str) -> dict[str, str]:
+    """Create a stateless, signed Spotify PKCE request for Streamlit Cloud.
+
+    Streamlit can establish a new browser session after an external OAuth redirect.
+    The PKCE verifier is therefore carried inside an HMAC-signed state value instead
+    of relying on ``st.session_state`` surviving the round trip.
+    """
     verifier, challenge = _pkce_pair()
-    state = secrets.token_urlsafe(24)
+    payload = {
+        "v": verifier,
+        "n": secrets.token_urlsafe(16),
+        "iat": int(time.time()),
+        "cid": hashlib.sha256(client_id.encode("utf-8")).hexdigest()[:16],
+        "uri": hashlib.sha256(redirect_uri.encode("utf-8")).hexdigest()[:16],
+    }
+    encoded = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    signature = _b64url_encode(hmac.new(_state_key(state_secret), encoded.encode("ascii"), hashlib.sha256).digest())
+    state = f"{encoded}.{signature}"
     params = {
         "client_id": client_id,
         "response_type": "code",
@@ -80,11 +111,35 @@ def build_web_authorization(client_id: str, redirect_uri: str) -> dict[str, str]
         "code_challenge_method": "S256",
         "code_challenge": challenge,
     }
-    return {
-        "url": AUTH_URL + "?" + urllib.parse.urlencode(params),
-        "state": state,
-        "verifier": verifier,
-    }
+    return {"url": AUTH_URL + "?" + urllib.parse.urlencode(params), "state": state}
+
+
+def verify_web_state(
+    state: str, client_id: str, redirect_uri: str, state_secret: str, max_age_sec: int = 600
+) -> str:
+    """Validate a signed OAuth state and return its PKCE verifier."""
+    try:
+        encoded, supplied_signature = str(state).split(".", 1)
+        expected_signature = _b64url_encode(
+            hmac.new(_state_key(state_secret), encoded.encode("ascii"), hashlib.sha256).digest()
+        )
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("서명이 일치하지 않습니다.")
+        payload = json.loads(_b64url_decode(encoded).decode("utf-8"))
+        issued_at = int(payload.get("iat", 0))
+        now = int(time.time())
+        if issued_at <= 0 or now - issued_at > max_age_sec or issued_at > now + 60:
+            raise ValueError("로그인 요청이 만료되었습니다.")
+        expected_cid = hashlib.sha256(client_id.encode("utf-8")).hexdigest()[:16]
+        expected_uri = hashlib.sha256(redirect_uri.encode("utf-8")).hexdigest()[:16]
+        if payload.get("cid") != expected_cid or payload.get("uri") != expected_uri:
+            raise ValueError("앱 정보가 일치하지 않습니다.")
+        verifier = str(payload.get("v", ""))
+        if len(verifier) < 43:
+            raise ValueError("PKCE verifier가 올바르지 않습니다.")
+        return verifier
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Spotify 로그인 state 검증 실패: {exc}") from exc
 
 
 def exchange_web_code(client_id: str, redirect_uri: str, code: str, verifier: str) -> dict[str, Any]:

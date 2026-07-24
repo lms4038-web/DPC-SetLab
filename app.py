@@ -20,7 +20,7 @@ from performance_planner import PerformancePlanSettings, apply_performance_plan
 from settings_manager import load_settings, save_settings
 from spotify_client import (
     api_from_token, authorize, build_web_authorization, discover_fill_tracks,
-    exchange_web_code, get_valid_token, get_valid_token_data, match_set,
+    exchange_web_code, get_valid_token, get_valid_token_data, match_set, verify_web_state,
     reset_token, test_spotify_connection,
 )
 
@@ -79,7 +79,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 3.0", page_icon="🎛️", layout="wide")
+st.set_page_config(page_title="DPC SetLab 3.1", page_icon="🎛️", layout="wide")
 st.markdown("""
 <style>
 .block-container {padding-top: 2rem; padding-bottom: 4rem;}
@@ -113,11 +113,12 @@ def load_uploaded(name: str, data: bytes):
 
 
 settings = load_settings(getattr(st, "secrets", None))
-st.title("🎛️ DPC SetLab 3.0")
+st.title("🎛️ DPC SetLab 3.1")
 st.caption("공연 상황 설계 → AI 1차 세트 → Spotify 보충 → Rekordbox 재분석 → AI Final → 공연 리포트")
 
 client_id = str(settings.get("spotify", {}).get("client_id", "")).strip()
 redirect_uri = str(settings.get("spotify", {}).get("redirect_uri", "http://127.0.0.1:8888/callback")).strip()
+oauth_state_secret = str(settings.get("app", {}).get("oauth_state_secret", "")).strip()
 is_web_spotify = redirect_uri.lower().startswith("https://")
 lastfm_api_key = str(settings.get("lastfm", {}).get("api_key", "")).strip()
 discogs_token = str(settings.get("discogs", {}).get("token", "")).strip()
@@ -135,21 +136,19 @@ if is_web_spotify and client_id:
         st.error(f"Spotify 승인이 취소되었거나 실패했습니다: {oauth_error}")
         st.query_params.clear()
     elif oauth_code:
-        flow = st.session_state.get("spotify_oauth_flow") or {}
-        if not flow or oauth_state != flow.get("state"):
-            st.error("Spotify 로그인 state 검증에 실패했습니다. 다시 연결해주세요.")
+        try:
+            verifier = verify_web_state(
+                str(oauth_state or ""), client_id, redirect_uri, oauth_state_secret
+            )
+            st.session_state["spotify_web_token"] = exchange_web_code(
+                client_id, redirect_uri, str(oauth_code), verifier
+            )
             st.query_params.clear()
-        else:
-            try:
-                st.session_state["spotify_web_token"] = exchange_web_code(
-                    client_id, redirect_uri, str(oauth_code), str(flow.get("verifier", ""))
-                )
-                st.session_state.pop("spotify_oauth_flow", None)
-                st.query_params.clear()
-                st.success("Spotify 연결이 완료되었습니다.")
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Spotify 토큰 발급 실패: {exc}")
+            st.success("Spotify 연결이 완료되었습니다.")
+            st.rerun()
+        except Exception as exc:
+            st.query_params.clear()
+            st.error(f"Spotify 로그인 처리 실패: {exc}")
 
 
 def current_spotify_token():
@@ -176,25 +175,25 @@ def require_spotify_token():
 
 token = current_spotify_token()
 
-if is_web_spotify and client_id and not token:
-    flow = st.session_state.get("spotify_oauth_flow")
-    if not flow or flow.get("client_id") != client_id or flow.get("redirect_uri") != redirect_uri:
-        flow = build_web_authorization(client_id, redirect_uri)
-        flow.update({"client_id": client_id, "redirect_uri": redirect_uri})
-        st.session_state["spotify_oauth_flow"] = flow
+if is_web_spotify and client_id and not token and oauth_state_secret:
+    st.session_state["spotify_oauth_url"] = build_web_authorization(
+        client_id, redirect_uri, oauth_state_secret
+    )["url"]
 
 with st.sidebar:
     st.header("연결 상태")
     st.write("Spotify", "🟢 로그인 유지 중" if token else "⚪ 연결 필요")
     st.write("Last.fm", "🟢 Key 저장됨" if lastfm_api_key else "⚪ 설정 필요")
     st.caption("API 정보는 ⚙️ 설정 탭에서 한 번만 저장하면 됩니다.")
+    if is_web_spotify and client_id and not oauth_state_secret:
+        st.warning("Streamlit Secrets에 [app] oauth_state_secret을 추가해야 Spotify 로그인을 사용할 수 있습니다.")
     if is_web_spotify:
-        auth_url = (st.session_state.get("spotify_oauth_flow") or {}).get("url", "")
+        auth_url = st.session_state.get("spotify_oauth_url", "")
         st.link_button(
             "Spotify 연결 / 재연결",
             auth_url or redirect_uri,
             use_container_width=True,
-            disabled=not bool(client_id and auth_url),
+            disabled=not bool(client_id and auth_url and oauth_state_secret),
         )
     elif st.button("Spotify 연결 / 재연결", use_container_width=True, disabled=not bool(client_id)):
         try:
@@ -206,7 +205,7 @@ with st.sidebar:
     if st.button("저장된 Spotify 로그인 삭제", use_container_width=True):
         reset_token()
         st.session_state.pop("spotify_web_token", None)
-        st.session_state.pop("spotify_oauth_flow", None)
+        st.session_state.pop("spotify_oauth_url", None)
         st.success("로그인 정보를 삭제했습니다.")
         st.rerun()
     st.divider()
@@ -942,7 +941,7 @@ with settings_tab:
     s1, s2, s3 = st.columns(3)
     s1.metric("Spotify", "Connected" if token else "Not connected")
     s2.metric("Last.fm", "Configured" if lastfm_api_key else "Not configured")
-    s3.metric("DPC SetLab", "v3.0.0")
+    s3.metric("DPC SetLab", "v3.1.0")
     st.info("Streamlit Cloud에서는 config/settings.json 대신 App settings → Secrets에 키를 저장해야 재부팅 후에도 유지됩니다.")
     st.code('''[spotify]
 client_id = "YOUR_CLIENT_ID"

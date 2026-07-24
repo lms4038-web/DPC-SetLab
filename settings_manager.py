@@ -13,6 +13,7 @@ LEGACY_FILE = Path("config.json")
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "spotify": {"client_id": "", "redirect_uri": "http://127.0.0.1:8888/callback"},
+    "app": {"oauth_state_secret": ""},
     "lastfm": {"api_key": ""},
     "discogs": {"token": ""},
     "preferences": {
@@ -71,6 +72,7 @@ def load_settings(streamlit_secrets: Any | None = None) -> dict[str, Any]:
     spotify_secret = dict(secrets.get("spotify", {})) if isinstance(secrets.get("spotify", {}), Mapping) else {}
     lastfm_secret = dict(secrets.get("lastfm", {})) if isinstance(secrets.get("lastfm", {}), Mapping) else {}
     discogs_secret = dict(secrets.get("discogs", {})) if isinstance(secrets.get("discogs", {}), Mapping) else {}
+    app_secret = dict(secrets.get("app", {})) if isinstance(secrets.get("app", {}), Mapping) else {}
 
     settings["spotify"]["client_id"] = (
         os.getenv("SPOTIFY_CLIENT_ID")
@@ -91,6 +93,11 @@ def load_settings(streamlit_secrets: Any | None = None) -> dict[str, Any]:
         os.getenv("DISCOGS_TOKEN")
         or discogs_secret.get("token")
         or settings["discogs"].get("token", "")
+    )
+    settings["app"]["oauth_state_secret"] = (
+        os.getenv("DPC_OAUTH_STATE_SECRET")
+        or app_secret.get("oauth_state_secret")
+        or settings["app"].get("oauth_state_secret", "")
     )
     return settings
 
