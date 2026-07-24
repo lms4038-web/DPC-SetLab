@@ -1,3 +1,10 @@
+## 4.0.4-dev — Sprint 1A Patch 04
+
+- Spotify 자동 매칭 오류를 사용자가 직접 검색하고 정확한 곡으로 교체하는 Manual Rematch 기능 추가
+- 직접 교체한 곡은 신뢰도 1.0, 상태 `직접 수정`, 플레이리스트 포함 상태로 저장
+- 부족 시간 보충용 Spotify 장르 검색을 텍스트 입력에서 다중 선택 버튼으로 변경
+- 수동 Spotify 검색 결과에 아티스트, 앨범, 길이, 확인 링크 표시
+
 ## 4.0.3-dev — Sprint 1A Patch 03
 - Current Set preview now displays the full set in a scrollable table instead of only six tracks.
 - Added a Spotify Set Player to the left sidebar.

@@ -470,6 +470,31 @@ def discover_fill_tracks(
     return pd.DataFrame(selected)
 
 
+
+def search_manual_tracks(api: SpotifyAPI, query: str, limit: int = 10) -> pd.DataFrame:
+    """Search Spotify with a user-written query for manual match correction."""
+    query = str(query or "").strip()
+    columns = ["choice", "title", "artist", "album", "duration", "spotify_uri", "spotify_url"]
+    if not query:
+        return pd.DataFrame(columns=columns)
+    items = api.search_discovery_tracks(query, limit=max(1, min(int(limit), 10)), offset=0)
+    rows = []
+    for item in items:
+        uri = str(item.get("uri", ""))
+        if not uri.startswith("spotify:track:"):
+            continue
+        duration_sec = max(0, int(item.get("duration_ms", 0) or 0) // 1000)
+        rows.append({
+            "choice": False,
+            "title": item.get("name", ""),
+            "artist": ", ".join(a.get("name", "") for a in item.get("artists", [])),
+            "album": (item.get("album") or {}).get("name", ""),
+            "duration": f"{duration_sec // 60}:{duration_sec % 60:02d}",
+            "spotify_uri": uri,
+            "spotify_url": item.get("external_urls", {}).get("spotify", ""),
+        })
+    return pd.DataFrame(rows, columns=columns)
+
 def test_spotify_connection(client_id: str) -> tuple[bool, str]:
     """Validate the saved Spotify login and return a user-facing status."""
     client_id = client_id.strip()

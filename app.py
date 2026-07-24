@@ -24,7 +24,7 @@ from ui.sidebar import render_session_snapshot, render_set_player, render_sideba
 
 from spotify_client import (
     api_from_token, authorize, build_web_authorization, discover_fill_tracks,
-    exchange_web_code, get_valid_token, get_valid_token_data, match_set, verify_web_state,
+    exchange_web_code, get_valid_token, get_valid_token_data, match_set, search_manual_tracks, verify_web_state,
     reset_token, test_spotify_connection,
 )
 
@@ -83,7 +83,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 4.0.3-dev", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 4.0.4-dev", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -691,6 +691,65 @@ with spotify_tab:
                     },
                     num_rows="fixed",
                 )
+                st.session_state["spotify_matches"] = edited_matches.copy()
+
+                st.markdown("### 잘못 매칭된 곡 직접 수정")
+                st.caption("원본 곡을 선택하고 Spotify를 다시 검색한 뒤, 정확한 결과로 교체할 수 있습니다.")
+                repair_options = edited_matches.index.tolist()
+                repair_index = st.selectbox(
+                    "수정할 원본 곡",
+                    repair_options,
+                    format_func=lambda i: f"{int(edited_matches.loc[i, 'order']):02d}. {edited_matches.loc[i, 'input_artist']} – {edited_matches.loc[i, 'input_title']}",
+                    key="spotify_repair_index",
+                )
+                selected_match = edited_matches.loc[repair_index]
+                default_query = f"{selected_match['input_title']} {selected_match['input_artist']}".strip()
+                manual_query = st.text_input(
+                    "Spotify 직접 검색어",
+                    value=default_query,
+                    help="리믹스명, 버전명, 피처링 아티스트까지 추가하면 더 정확하게 찾을 수 있습니다.",
+                    key=f"spotify_manual_query_{repair_index}",
+                )
+                if st.button("Spotify에서 다시 검색", use_container_width=True, key="spotify_manual_search"):
+                    try:
+                        api = api_from_token(require_spotify_token())
+                        results = search_manual_tracks(api, manual_query, limit=10)
+                        st.session_state["spotify_manual_results"] = results
+                        st.session_state["spotify_manual_results_for"] = repair_index
+                        if results.empty:
+                            st.warning("검색 결과가 없습니다. 제목이나 아티스트 검색어를 단순하게 바꿔보세요.")
+                    except Exception as exc:
+                        st.error(str(exc))
+
+                manual_results = st.session_state.get("spotify_manual_results")
+                if isinstance(manual_results, pd.DataFrame) and st.session_state.get("spotify_manual_results_for") == repair_index and not manual_results.empty:
+                    result_labels = [
+                        f"{row['artist']} – {row['title']} · {row['album']} · {row['duration']}"
+                        for _, row in manual_results.iterrows()
+                    ]
+                    picked_position = st.radio(
+                        "검색 결과에서 정확한 곡 선택",
+                        options=list(range(len(result_labels))),
+                        format_func=lambda i: result_labels[i],
+                        key=f"spotify_manual_pick_{repair_index}",
+                    )
+                    picked = manual_results.iloc[picked_position]
+                    if picked.get("spotify_url"):
+                        st.link_button("선택한 곡 Spotify에서 확인", str(picked["spotify_url"]), use_container_width=True)
+                    if st.button("이 곡으로 매칭 교체", type="primary", use_container_width=True, key="spotify_manual_apply"):
+                        updated = edited_matches.copy()
+                        updated.loc[repair_index, "include"] = True
+                        updated.loc[repair_index, "confidence"] = 1.0
+                        updated.loc[repair_index, "spotify_title"] = picked["title"]
+                        updated.loc[repair_index, "spotify_artists"] = picked["artist"]
+                        updated.loc[repair_index, "spotify_uri"] = picked["spotify_uri"]
+                        updated.loc[repair_index, "spotify_url"] = picked["spotify_url"]
+                        updated.loc[repair_index, "status"] = "직접 수정"
+                        st.session_state["spotify_matches"] = updated
+                        st.session_state.pop("spotify_manual_results", None)
+                        st.session_state.pop("spotify_manual_results_for", None)
+                        st.success("선택한 Spotify 곡으로 교체했습니다. 플레이리스트 생성 시 이 곡이 포함됩니다.")
+                        st.rerun()
                 st.divider()
                 st.markdown("### 부족한 세트 시간 자동 보충")
                 settings = st.session_state.get("build_settings")
@@ -725,12 +784,21 @@ with spotify_tab:
                     st.success("현재 세트가 목표 시간을 충족합니다.")
                 else:
                     st.warning(f"목표 시간보다 약 {format_seconds(shortage_sec)} 부족합니다.")
-                    selected_genres_for_fill = st.session_state.get("selected_genres", [])
-                    genre_hint = st.text_input(
+                    selected_genres_for_fill = [g for g in st.session_state.get("selected_genres", []) if g != "장르 미지정"]
+                    available_fill_genres = sorted({
+                        str(g).strip()
+                        for g in list(selected_genres_for_fill) + set_df.get("genre", pd.Series(dtype=str)).fillna("").astype(str).tolist()
+                        if str(g).strip() and str(g).strip() != "장르 미지정"
+                    })
+                    genre_hint = st.segmented_control(
                         "Spotify 검색 장르",
-                        value=", ".join(g for g in selected_genres_for_fill if g != "장르 미지정"),
-                        help="쉼표로 여러 장르를 입력할 수 있습니다. Spotify Search의 genre 필터와 기존 세트 아티스트를 함께 사용합니다.",
-                    )
+                        options=available_fill_genres,
+                        default=[g for g in selected_genres_for_fill if g in available_fill_genres],
+                        selection_mode="multi",
+                        help="검색에 사용할 장르 버튼을 여러 개 선택할 수 있습니다.",
+                        key="spotify_fill_genres",
+                    ) if available_fill_genres else []
+                    st.caption("선택한 버튼의 장르와 현재 세트 아티스트를 함께 사용해 보충곡을 검색합니다.")
                     if st.button("Spotify에서 보충곡 찾기", use_container_width=True):
                         try:
                             api = api_from_token(require_spotify_token())
@@ -739,12 +807,12 @@ with spotify_tab:
                                 api,
                                 set_df=set_df,
                                 shortage_sec=shortage_sec,
-                                genres=[x.strip() for x in genre_hint.split(",") if x.strip()],
+                                genres=list(genre_hint or []),
                                 exclude_uris=existing_uris,
                             )
                             st.session_state["spotify_fill_tracks"] = fill
                             if fill.empty:
-                                st.warning("조건에 맞는 보충곡을 찾지 못했습니다. 장르 검색어를 더 넓게 바꿔보세요.")
+                                st.warning("조건에 맞는 보충곡을 찾지 못했습니다. 선택한 장르를 줄이거나 다른 장르 버튼을 선택해보세요.")
                             else:
                                 st.success(f"보충 후보 {len(fill)}곡을 찾았습니다.")
                         except Exception as exc:
@@ -950,7 +1018,7 @@ with settings_tab:
     s1, s2, s3 = st.columns(3)
     s1.metric("Spotify", "Connected" if token else "Not connected")
     s2.metric("Last.fm", "Configured" if lastfm_api_key else "Not configured")
-    s3.metric("DPC SetLab", "v4.0.3-dev")
+    s3.metric("DPC SetLab", "v4.0.4-dev")
     st.info("Streamlit Cloud에서는 config/settings.json 대신 App settings → Secrets에 키를 저장해야 재부팅 후에도 유지됩니다.")
     st.code('''[spotify]
 client_id = "YOUR_CLIENT_ID"
