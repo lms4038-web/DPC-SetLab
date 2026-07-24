@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 
@@ -15,15 +14,15 @@ from dpc_insights import (
     VENUE_PRESETS, AUDIENCE_PRESETS, MOOD_PRESETS, apply_context, explain_set,
     recommend_next_tracks, analyze_history, save_style_profile, load_style_profile, make_html_report,
 )
-from online_metadata import enrich_dataframe
+from online_metadata import enrich_dataframe, test_lastfm_connection
 from playlist_intelligence import diagnose_playlist, display_playlist_path, playlist_options, playlist_summary
 from performance_planner import PerformancePlanSettings, apply_performance_plan
+from settings_manager import load_settings, save_settings
 from spotify_client import (
     api_from_token, authorize, discover_fill_tracks, get_valid_token,
-    match_set, reset_token,
+    match_set, reset_token, test_spotify_connection,
 )
 
-CONFIG_FILE = Path("config.json")
 SAMPLE_XML = Path("samples/sample_rekordbox.xml")
 SAMPLE_CSV = Path("samples/sample_tracks.csv")
 
@@ -79,7 +78,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 2.2", page_icon="🎛️", layout="wide")
+st.set_page_config(page_title="DPC SetLab 2.4", page_icon="🎛️", layout="wide")
 st.markdown("""
 <style>
 .block-container {padding-top: 2rem; padding-bottom: 4rem;}
@@ -90,18 +89,6 @@ div[role="radiogroup"] label {border: 1px solid rgba(128,128,128,.28); border-ra
 </style>
 """, unsafe_allow_html=True)
 
-
-def load_config() -> dict:
-    if not CONFIG_FILE.exists():
-        return {"client_id": "", "playlist_name": "DPC DJ Set", "public": False, "lastfm_api_key": "", "discogs_token": ""}
-    try:
-        return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return {"client_id": "", "playlist_name": "DPC DJ Set", "public": False, "lastfm_api_key": "", "discogs_token": ""}
-
-
-def save_config(config: dict) -> None:
-    CONFIG_FILE.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def load_uploaded(name: str, data: bytes):
@@ -124,28 +111,27 @@ def load_uploaded(name: str, data: bytes):
     st.session_state.pop("spotify_matches", None)
 
 
-config = load_config()
-st.title("🎛️ DPC SetLab 2.2")
+settings = load_settings(getattr(st, "secrets", None))
+st.title("🎛️ DPC SetLab 2.4")
 st.caption("공연 상황 설계 → AI 1차 세트 → Spotify 보충 → Rekordbox 재분석 → AI Final → 공연 리포트")
 
+client_id = str(settings.get("spotify", {}).get("client_id", "")).strip()
+lastfm_api_key = str(settings.get("lastfm", {}).get("api_key", "")).strip()
+discogs_token = str(settings.get("discogs", {}).get("token", "")).strip()
+default_playlist_name = str(settings.get("preferences", {}).get("playlist_name", "DPC DJ Set"))
+default_public = bool(settings.get("preferences", {}).get("public_playlist", False))
+auto_connect = bool(settings.get("preferences", {}).get("auto_connect", True))
+
 with st.sidebar:
-    st.header("Spotify 설정")
-    client_id = st.text_input("Client ID", value=config.get("client_id", ""), placeholder="Spotify Developer Client ID")
-    default_playlist_name = st.text_input("기본 플레이리스트 이름", value=config.get("playlist_name", "DPC DJ Set"))
-    default_public = st.checkbox("기본 공개 플레이리스트", value=bool(config.get("public", False)))
-    st.divider()
-    st.header("온라인 보강 설정")
-    lastfm_api_key = st.text_input("Last.fm API Key", value=config.get("lastfm_api_key", ""), type="password", help="장르 태그, 청취 지표, 유사 아티스트 보강용")
-    discogs_token = st.text_input("Discogs Token (선택)", value=config.get("discogs_token", ""), type="password", help="레이블, 스타일, 발매국가 보강용")
-    if st.button("설정 저장", use_container_width=True):
-        save_config({"client_id": client_id.strip(), "playlist_name": default_playlist_name, "public": default_public, "lastfm_api_key": lastfm_api_key.strip(), "discogs_token": discogs_token.strip()})
-        st.success("config.json에 저장했습니다.")
-    token = get_valid_token(client_id.strip()) if client_id.strip() else None
-    st.write("Spotify 상태:", "🟢 연결됨" if token else "⚪ 연결 안 됨")
-    if st.button("Spotify 연결 / 재연결", use_container_width=True, disabled=not bool(client_id.strip())):
+    st.header("연결 상태")
+    token = get_valid_token(client_id) if client_id and auto_connect else None
+    st.write("Spotify", "🟢 로그인 유지 중" if token else "⚪ 연결 필요")
+    st.write("Last.fm", "🟢 Key 저장됨" if lastfm_api_key else "⚪ 설정 필요")
+    st.caption("API 정보는 ⚙️ 설정 탭에서 한 번만 저장하면 됩니다.")
+    if st.button("Spotify 연결 / 재연결", use_container_width=True, disabled=not bool(client_id)):
         try:
             with st.spinner("브라우저에서 Spotify 접근을 승인해주세요."):
-                token = authorize(client_id.strip())
+                token = authorize(client_id)
             st.success("Spotify 연결 완료")
         except Exception as exc:
             st.error(str(exc))
@@ -155,9 +141,8 @@ with st.sidebar:
     st.divider()
     st.markdown("**Redirect URI**")
     st.code("http://127.0.0.1:8888/callback", language=None)
-    st.caption("Spotify Developer Dashboard에 정확히 같은 주소를 등록하세요.")
 
-load_tab, online_tab, build_tab, spotify_tab, coach_tab, history_tab, guide_tab = st.tabs(["1. 후보곡", "2. 온라인 보강", "3. AI 세트", "4. Spotify 보충", "5. AI 코치", "6. History 분석", "워크플로우"])
+load_tab, online_tab, build_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs(["1. 후보곡", "2. 온라인 보강", "3. AI 세트", "4. Spotify 보충", "5. AI 코치", "6. History 분석", "⚙️ 설정", "워크플로우"])
 
 with load_tab:
     st.subheader("Rekordbox 라이브러리 불러오기")
@@ -820,8 +805,67 @@ with history_tab:
         except Exception as exc:
             st.error(str(exc))
 
+with settings_tab:
+    st.subheader("⚙️ Settings")
+    st.caption("API 정보는 로컬에서는 config/settings.json에 저장됩니다. GitHub에는 업로드되지 않습니다.")
+    with st.form("settings_form"):
+        spotify_client_id_input = st.text_input("Spotify Client ID", value=client_id, placeholder="Spotify Developer Client ID")
+        lastfm_key_input = st.text_input("Last.fm API Key", value=lastfm_api_key, type="password")
+        discogs_token_input = st.text_input("Discogs Token (선택)", value=discogs_token, type="password")
+        playlist_name_input = st.text_input("기본 Spotify 플레이리스트 이름", value=default_playlist_name)
+        public_input = st.checkbox("기본 공개 플레이리스트", value=default_public)
+        auto_connect_input = st.checkbox("앱 시작 시 저장된 Spotify 로그인 자동 확인", value=auto_connect)
+        save_clicked = st.form_submit_button("설정 저장", use_container_width=True)
+    if save_clicked:
+        new_settings = {
+            "spotify": {"client_id": spotify_client_id_input.strip()},
+            "lastfm": {"api_key": lastfm_key_input.strip()},
+            "discogs": {"token": discogs_token_input.strip()},
+            "preferences": {
+                "playlist_name": playlist_name_input.strip() or "DPC DJ Set",
+                "public_playlist": public_input,
+                "auto_connect": auto_connect_input,
+            },
+        }
+        try:
+            save_settings(new_settings)
+            st.success("설정을 저장했습니다. 새 값을 전체 앱에 적용하려면 아래 버튼을 누르세요.")
+            if st.button("저장한 설정 적용", type="primary", use_container_width=True):
+                st.rerun()
+        except OSError as exc:
+            st.error(f"설정 저장 실패: {exc}")
+
+    st.divider()
+    st.markdown("#### 연결 테스트")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Spotify 연결 테스트", use_container_width=True, disabled=not bool(client_id)):
+            ok, message = test_spotify_connection(client_id)
+            (st.success if ok else st.warning)(message)
+    with c2:
+        if st.button("Last.fm API 테스트", use_container_width=True, disabled=not bool(lastfm_api_key)):
+            with st.spinner("Last.fm 연결 확인 중..."):
+                ok, message = test_lastfm_connection(lastfm_api_key)
+            (st.success if ok else st.error)(message)
+
+    st.divider()
+    s1, s2, s3 = st.columns(3)
+    s1.metric("Spotify", "Connected" if token else "Not connected")
+    s2.metric("Last.fm", "Configured" if lastfm_api_key else "Not configured")
+    s3.metric("DPC SetLab", "v2.4.0")
+    st.info("Streamlit Cloud에서는 config/settings.json 대신 App settings → Secrets에 키를 저장해야 재부팅 후에도 유지됩니다.")
+    st.code('''[spotify]
+client_id = "YOUR_CLIENT_ID"
+
+[lastfm]
+api_key = "YOUR_LASTFM_API_KEY"
+
+[discogs]
+token = "OPTIONAL"''', language="toml")
+
+
 with guide_tab:
-    st.subheader("DPC SetLab 2.0 워크플로우")
+    st.subheader("DPC SetLab 2.4 워크플로우")
     st.markdown("""
 1. **Rekordbox 후보곡 불러오기**  
    Collection 또는 공연 후보 플레이리스트를 XML로 내보냅니다.

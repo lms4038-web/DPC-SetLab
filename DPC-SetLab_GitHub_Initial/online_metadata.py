@@ -262,3 +262,29 @@ def enrich_dataframe(
         lambda v: ", ".join(v) if isinstance(v, list) else str(v or "")
     )
     return out
+
+
+def test_lastfm_connection(api_key: str) -> tuple[bool, str]:
+    """Validate a Last.fm API key with a lightweight public API request."""
+    api_key = api_key.strip()
+    if not api_key:
+        return False, "API Key가 비어 있습니다."
+    try:
+        response = requests.get(
+            "https://ws.audioscrobbler.com/2.0/",
+            params={
+                "method": "artist.getInfo",
+                "artist": "Daft Punk",
+                "api_key": api_key,
+                "format": "json",
+                "autocorrect": 1,
+            },
+            timeout=15,
+        )
+        data = response.json()
+        if response.ok and isinstance(data, dict) and data.get("artist"):
+            return True, "Last.fm API Key가 정상입니다."
+        message = data.get("message", f"HTTP {response.status_code}") if isinstance(data, dict) else f"HTTP {response.status_code}"
+        return False, f"Last.fm 연결 확인 실패: {message}"
+    except (requests.RequestException, ValueError) as exc:
+        return False, f"Last.fm 연결 확인 실패: {exc}"

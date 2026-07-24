@@ -346,3 +346,19 @@ def discover_fill_tracks(
         if total >= shortage_sec + 120:
             break
     return pd.DataFrame(selected)
+
+
+def test_spotify_connection(client_id: str) -> tuple[bool, str]:
+    """Validate the saved Spotify login and return a user-facing status."""
+    client_id = client_id.strip()
+    if not client_id:
+        return False, "Client ID가 비어 있습니다."
+    token = get_valid_token(client_id)
+    if not token:
+        return False, "저장된 Spotify 로그인이 없습니다. 먼저 연결을 승인하세요."
+    try:
+        user = api_from_token(token).me()
+        name = user.get("display_name") or user.get("id") or "Spotify 사용자"
+        return True, f"{name} 계정에 연결되었습니다."
+    except requests.RequestException as exc:
+        return False, f"Spotify 연결 확인 실패: {exc}"

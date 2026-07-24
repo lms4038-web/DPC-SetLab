@@ -1,0 +1,10 @@
+{
+  "spotify": {"client_id": ""},
+  "lastfm": {"api_key": ""},
+  "discogs": {"token": ""},
+  "preferences": {
+    "playlist_name": "DPC DJ Set",
+    "public_playlist": false,
+    "auto_connect": true
+  }
+}

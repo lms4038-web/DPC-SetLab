@@ -63,3 +63,18 @@ AI Performance Planner 결과에서 각 곡의 실제 사용 범위를 확인할
 - 세트 타임라인: 전체 공연에서 해당 곡이 들어오고 빠지는 예상 시각
 
 표 아래의 `곡별 사용 구간 상세 보기`를 펼치면 모든 값을 곡별로 확인할 수 있습니다.
+
+## v2.4 설정 저장
+로컬 앱에서는 `⚙️ 설정` 탭에서 Spotify Client ID와 Last.fm API Key를 한 번 저장하면 이후 자동으로 불러옵니다. 실제 값은 `config/settings.json`에 저장되며 `.gitignore`로 GitHub 업로드에서 제외됩니다.
+
+Streamlit Community Cloud에서는 앱의 **Settings → Secrets**에 다음 형식으로 저장하세요.
+
+```toml
+[spotify]
+client_id = "YOUR_CLIENT_ID"
+
+[lastfm]
+api_key = "YOUR_LASTFM_API_KEY"
+```
+
+Spotify 로그인 토큰은 로컬 PKCE 콜백(`http://127.0.0.1:8888/callback`)을 사용하므로 현재 버전의 Spotify 로그인/플레이리스트 생성 기능은 로컬 실행을 권장합니다. 온라인 앱에서는 Last.fm 분석과 저장된 Secret 자동 불러오기를 사용할 수 있습니다.

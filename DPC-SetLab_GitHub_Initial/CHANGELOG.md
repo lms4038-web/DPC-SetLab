@@ -29,3 +29,12 @@
 - 곡별 상세 구간 펼쳐보기 UI 추가
 - CSV에 사람이 읽는 시간값과 원시 초 단위 값을 함께 포함
 - 사용 구간 회귀 테스트 추가
+
+## v2.4.0 — Settings & UX
+- Spotify Client ID, Last.fm API Key, Discogs Token을 `config/settings.json`에 한 번 저장하고 자동 불러오기
+- 기존 `config.json` 설정 자동 마이그레이션
+- 환경변수 및 Streamlit Cloud Secrets 지원
+- 별도 Settings 탭과 연결 상태 대시보드 추가
+- Spotify 저장 로그인 자동 확인 및 연결 테스트 추가
+- Last.fm API Key 유효성 검사 추가
+- 민감한 로컬 설정 파일 Git 제외
