@@ -26,18 +26,26 @@ html, body, [class*="css"] {font-family: Inter, Pretendard, -apple-system, Blink
     var(--dpc-bg);
   color: var(--dpc-text);
 }
-.block-container {max-width: 1500px; padding-top: 1.15rem; padding-bottom: 5rem;}
-header[data-testid="stHeader"] {background: rgba(9, 11, 16, .74); backdrop-filter: blur(16px);}
+.block-container {max-width: 1500px; padding-top: 5.4rem; padding-bottom: 5rem;}
+header[data-testid="stHeader"] {background: rgba(9, 11, 16, .88); backdrop-filter: blur(16px); border-bottom:1px solid var(--dpc-border);}
+header[data-testid="stHeader"] + div {scroll-margin-top:5rem;}
 [data-testid="stSidebar"] {background: #0d1017; border-right: 1px solid var(--dpc-border);}
 [data-testid="stSidebar"] .block-container {padding-top: 1.4rem;}
 
 /* Hide Streamlit's default tab underline treatment and use deck-style tabs. */
-.stTabs [data-baseweb="tab-list"] {gap: .42rem; overflow-x: auto; padding: .25rem 0 .85rem;}
-.stTabs [data-baseweb="tab"] {
-  height: 2.75rem; border: 1px solid var(--dpc-border); border-radius: .72rem;
-  background: rgba(255,255,255,.025); padding: 0 .95rem; color: var(--dpc-muted);
-  white-space: nowrap;
+.stTabs [data-baseweb="tab-list"] {
+  position: sticky; top: 3.45rem; z-index: 999;
+  gap: .42rem; overflow-x: auto; padding: .55rem .6rem .7rem; margin:-4.6rem 0 1rem;
+  background:rgba(7,9,14,.96); backdrop-filter:blur(18px);
+  border:1px solid var(--dpc-border); border-radius:1rem;
+  box-shadow:0 14px 40px rgba(0,0,0,.30);
 }
+.stTabs [data-baseweb="tab"] {
+  height: 3.1rem; border: 1px solid var(--dpc-border); border-radius: .72rem;
+  background: rgba(255,255,255,.025); padding: 0 .95rem; color: var(--dpc-muted);
+  white-space: nowrap; font-weight:700; letter-spacing:-.01em;
+}
+.stTabs [data-baseweb="tab"] p {font-size:.83rem;}
 .stTabs [aria-selected="true"] {
   background: linear-gradient(135deg, rgba(139,92,246,.23), rgba(34,211,238,.08));
   border-color: rgba(139,92,246,.50); color: var(--dpc-text);
@@ -78,10 +86,18 @@ hr {border-color: var(--dpc-border) !important;}
   background: linear-gradient(135deg, rgba(20,23,34,.98), rgba(13,16,24,.94));
   box-shadow: 0 24px 70px rgba(0,0,0,.28); margin-bottom:1rem;
 }
-.dpc-hero:after {
-  content:""; position:absolute; width:440px; height:440px; right:-150px; top:-245px;
-  border-radius:50%; background:radial-gradient(circle, rgba(139,92,246,.32), transparent 65%);
+.dpc-hero:before {
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.65;
+  background:
+    repeating-radial-gradient(ellipse at 79% 54%, transparent 0 17px, rgba(139,92,246,.16) 18px 20px, transparent 21px 34px),
+    linear-gradient(115deg, transparent 0 54%, rgba(124,58,237,.12) 72%, rgba(34,211,238,.05) 100%);
+  transform:skewY(-2deg) scale(1.08);
 }
+.dpc-hero:after {
+  content:""; position:absolute; width:540px; height:540px; right:-155px; top:-255px;
+  border-radius:50%; background:radial-gradient(circle, rgba(139,92,246,.38), transparent 66%);
+}
+.dpc-hero > * {position:relative;z-index:2;}
 .dpc-hero h1 {font-size:clamp(2.2rem,4vw,4rem); line-height:.96; letter-spacing:-.055em; margin:.45rem 0 .8rem; max-width:850px;}
 .dpc-hero p {color:#b1b6c2; max-width:720px; font-size:1.02rem; line-height:1.7; margin:0;}
 .dpc-live-chip {display:inline-flex; align-items:center; gap:.45rem; color:#d8dcE5; font-size:.79rem; margin-top:1.2rem;}
@@ -109,8 +125,9 @@ hr {border-color: var(--dpc-border) !important;}
 div[role="radiogroup"] {gap:.45rem;flex-wrap:wrap;}
 div[role="radiogroup"] label {border:1px solid var(--dpc-border);border-radius:.75rem;padding:.55rem .75rem;background:rgba(255,255,255,.025);}
 
+@media (max-width: 900px) {.block-container{padding-top:6.2rem}.stTabs [data-baseweb="tab-list"]{top:3.35rem;margin-top:-5.15rem}}
 @media (max-width: 1100px) {.dpc-card-grid {grid-template-columns:repeat(2,minmax(0,1fr));}.dpc-workflow{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media (max-width: 650px) {.block-container{padding-left:1rem;padding-right:1rem}.dpc-hero{padding:1.55rem 1.3rem;min-height:225px}.dpc-card-grid,.dpc-workflow{grid-template-columns:1fr}.dpc-hero h1{font-size:2.35rem}}
+@media (max-width: 650px) {.block-container{padding-left:1rem;padding-right:1rem;padding-top:6.6rem}.stTabs [data-baseweb="tab-list"]{top:3.25rem;border-radius:.8rem;padding:.45rem}.stTabs [data-baseweb="tab"]{height:2.75rem;padding:0 .75rem}.dpc-hero{padding:1.55rem 1.3rem;min-height:225px}.dpc-card-grid,.dpc-workflow{grid-template-columns:1fr}.dpc-hero h1{font-size:2.35rem}}
 </style>
 """
 

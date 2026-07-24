@@ -60,8 +60,8 @@ def render_home(*, spotify_connected: bool, lastfm_configured: bool) -> None:
     st.markdown(
         """
         <div class="dpc-brandline">
-          <div class="dpc-kicker">PROJECT ORCHESTRA · SPRINT 1A</div>
-          <div class="dpc-version">4.0.0-dev</div>
+          <div class="dpc-kicker">PROJECT ORCHESTRA · SPRINT 1A · PATCH 01</div>
+          <div class="dpc-version">4.0.1-dev</div>
         </div>
         <section class="dpc-hero">
           <div class="dpc-kicker">DJ PERFORMANCE PLANNING SYSTEM</div>

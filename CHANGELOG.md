@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.0.1-dev · Sprint 1A Patch 01
+
+- Windows의 Streamlit Share/Settings 상단 바와 탭이 겹치는 문제 수정
+- OS와 브라우저 높이에 대응하는 상단 Safe Area 추가
+- 탭 내비게이션을 sticky control deck 형태로 변경
+- 탭 명칭을 DJ 워크플로 중심으로 재정리
+- Home Hero에 퍼포먼스 커브를 연상시키는 레이어 효과 추가
+- 작은 화면에서 탭이 가로 스크롤되도록 반응형 처리
+
 ## 4.0.0-dev · Sprint 1A
 
 - Added the ORCHESTRA shared design system.

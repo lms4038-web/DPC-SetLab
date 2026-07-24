@@ -82,7 +82,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 4.0-dev", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 4.0.1-dev", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -206,7 +206,7 @@ with st.sidebar:
     st.code(redirect_uri, language=None)
 
 home_tab, load_tab, online_tab, build_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs([
-    "◈ Home", "Library", "Metadata", "Set Builder", "Spotify", "AI Coach", "History", "Settings", "Guide"
+    "⌂ HOME", "♫ LIBRARY", "✦ CANDIDATES", "◈ CURRENT SET", "▦ PLANNER", "▥ ANALYTICS", "AI ASSISTANT", "⚙ SETTINGS", "? GUIDE"
 ])
 
 with home_tab:
