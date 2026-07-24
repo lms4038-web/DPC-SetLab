@@ -1,3 +1,12 @@
+## 4.0.5-dev — Sprint 1A Patch 05
+
+- EXPORT CENTER에 Rekordbox Playlist 내보내기 추가
+- 현재 세트 순서를 유지하는 Rekordbox XML 생성 및 다운로드
+- 범용 로컬 플레이리스트 M3U8 생성 및 다운로드
+- 다운로드 전 READY, PATH MISSING, STREAMING ONLY 상태 검사
+- 누락되는 곡 목록과 원인 표시
+- XML과 M3U8 용도 및 가져오기 방법 안내 추가
+
 ## 4.0.4-dev — Sprint 1A Patch 04
 
 - Spotify 자동 매칭 오류를 사용자가 직접 검색하고 정확한 곡으로 교체하는 Manual Rematch 기능 추가

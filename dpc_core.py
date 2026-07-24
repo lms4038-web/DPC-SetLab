@@ -616,3 +616,164 @@ def export_set_csv(df: pd.DataFrame) -> bytes:
     ]
     usable = [c for c in columns if c in df.columns]
     return df[usable].to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+
+
+def _location_to_uri(value: Any) -> str:
+    """Return a Rekordbox-compatible file URI when possible."""
+    text = clean_text(value)
+    if not text:
+        return ""
+    if text.lower().startswith("file:"):
+        return text
+    normalized = text.replace("\\", "/")
+    if re.match(r"^[A-Za-z]:/", normalized):
+        return "file://localhost/" + urllib.parse.quote(normalized, safe="/:~!$&'()*+,;=@")
+    try:
+        path = Path(text).expanduser()
+        return path.resolve(strict=False).as_uri()
+    except Exception:
+        return ""
+
+
+def _location_to_path(value: Any) -> str:
+    """Convert a Rekordbox file URI to a local path for M3U8 output."""
+    text = clean_text(value)
+    if not text:
+        return ""
+    if not text.lower().startswith("file:"):
+        return text
+    parsed = urllib.parse.urlparse(text)
+    path = urllib.parse.unquote(parsed.path or "")
+    if parsed.netloc and parsed.netloc.lower() not in {"", "localhost"}:
+        path = f"//{parsed.netloc}{path}"
+    if re.match(r"^/[A-Za-z]:/", path):
+        path = path[1:]
+    return path
+
+
+def assess_rekordbox_export(set_df: pd.DataFrame) -> pd.DataFrame:
+    """Classify each set row by whether it can be exported as a playable local track."""
+    rows: list[dict[str, Any]] = []
+    for pos, (_, row) in enumerate(set_df.iterrows(), start=1):
+        location = clean_text(row.get("location"))
+        spotify_uri = clean_text(row.get("spotify_uri"))
+        if location and _location_to_uri(location):
+            status = "READY"
+            reason = "로컬 파일 경로 확인됨"
+            include = True
+        elif spotify_uri.startswith("spotify:track:"):
+            status = "STREAMING ONLY"
+            reason = "Spotify 곡은 로컬 파일 경로가 없어 Rekordbox 파일로 내보낼 수 없습니다."
+            include = False
+        else:
+            status = "PATH MISSING"
+            reason = "로컬 파일 위치가 없거나 경로 형식을 해석할 수 없습니다."
+            include = False
+        rows.append({
+            "order": int(row.get("order", pos) or pos),
+            "title": clean_text(row.get("title")),
+            "artist": clean_text(row.get("artist")),
+            "location": location,
+            "status": status,
+            "reason": reason,
+            "include": include,
+        })
+    return pd.DataFrame(rows)
+
+
+def _safe_track_id(value: Any, fallback: int, used: set[int]) -> int:
+    try:
+        candidate = int(float(clean_text(value)))
+    except Exception:
+        candidate = fallback
+    while candidate in used or candidate <= 0:
+        candidate += 1
+    used.add(candidate)
+    return candidate
+
+
+def export_rekordbox_xml(set_df: pd.DataFrame, playlist_name: str = "DPC DJ Set") -> bytes:
+    """Create a Rekordbox XML collection containing playable local tracks in set order."""
+    assessment = assess_rekordbox_export(set_df)
+    ready_orders = set(assessment.loc[assessment["include"], "order"].astype(int).tolist())
+    root = ET.Element("DJ_PLAYLISTS", Version="1.0.0")
+    ET.SubElement(root, "PRODUCT", Name="DPC SetLab", Version="4.0.5-dev", Company="DPC")
+    collection = ET.SubElement(root, "COLLECTION")
+    playlist_tracks: list[int] = []
+    used_ids: set[int] = set()
+
+    ready_rows = []
+    for pos, (_, row) in enumerate(set_df.iterrows(), start=1):
+        order = int(row.get("order", pos) or pos)
+        if order not in ready_orders:
+            continue
+        ready_rows.append(row)
+    collection.set("Entries", str(len(ready_rows)))
+
+    for pos, row in enumerate(ready_rows, start=1):
+        track_id = _safe_track_id(row.get("track_id"), 100000 + pos, used_ids)
+        playlist_tracks.append(track_id)
+        attrs = {
+            "TrackID": str(track_id),
+            "Name": clean_text(row.get("title")),
+            "Artist": clean_text(row.get("artist")),
+            "Album": clean_text(row.get("album")),
+            "Genre": clean_text(row.get("genre")),
+            "TotalTime": str(int(round(parse_duration(row.get("duration_sec"), 0)))),
+            "AverageBpm": f"{parse_number(row.get('bpm'), 0):.2f}",
+            "Tonality": clean_text(row.get("key")),
+            "Comments": clean_text(row.get("comments")),
+            "Location": _location_to_uri(row.get("location")),
+        }
+        track = ET.SubElement(collection, "TRACK", **attrs)
+        cue_raw = row.get("cue_points")
+        try:
+            cues = json.loads(cue_raw) if isinstance(cue_raw, str) and cue_raw.strip() else cue_raw
+        except Exception:
+            cues = []
+        if isinstance(cues, list):
+            for cue in cues:
+                if not isinstance(cue, dict):
+                    continue
+                cue_attrs = {
+                    "Name": clean_text(cue.get("name")),
+                    "Type": clean_text(cue.get("type")) or "0",
+                    "Start": f"{parse_number(cue.get('start'), 0):.3f}",
+                    "Num": clean_text(cue.get("num")) or "-1",
+                }
+                ET.SubElement(track, "POSITION_MARK", **cue_attrs)
+
+    playlists = ET.SubElement(root, "PLAYLISTS")
+    root_node = ET.SubElement(playlists, "NODE", Type="0", Name="ROOT", Count="1")
+    folder = ET.SubElement(root_node, "NODE", Type="0", Name="DPC SetLab", Count="1")
+    playlist = ET.SubElement(
+        folder, "NODE", Type="1", Name=clean_text(playlist_name) or "DPC DJ Set",
+        KeyType="0", Entries=str(len(playlist_tracks))
+    )
+    for track_id in playlist_tracks:
+        ET.SubElement(playlist, "TRACK", Key=str(track_id))
+
+    tree = ET.ElementTree(root)
+    try:
+        ET.indent(tree, space="  ")
+    except AttributeError:
+        pass
+    buffer = io.BytesIO()
+    tree.write(buffer, encoding="utf-8", xml_declaration=True)
+    return buffer.getvalue()
+
+
+def export_m3u8(set_df: pd.DataFrame) -> bytes:
+    """Create an extended UTF-8 M3U playlist containing playable local tracks."""
+    assessment = assess_rekordbox_export(set_df)
+    ready_orders = set(assessment.loc[assessment["include"], "order"].astype(int).tolist())
+    lines = ["#EXTM3U"]
+    for pos, (_, row) in enumerate(set_df.iterrows(), start=1):
+        order = int(row.get("order", pos) or pos)
+        if order not in ready_orders:
+            continue
+        duration = int(round(parse_duration(row.get("duration_sec"), 0)))
+        label = " - ".join(x for x in [clean_text(row.get("artist")), clean_text(row.get("title"))] if x)
+        lines.append(f"#EXTINF:{duration},{label}")
+        lines.append(_location_to_path(row.get("location")))
+    return ("\ufeff" + "\n".join(lines) + "\n").encode("utf-8")
