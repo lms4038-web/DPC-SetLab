@@ -20,6 +20,7 @@ from performance_planner import PerformancePlanSettings, apply_performance_plan
 from settings_manager import load_settings, save_settings
 from ui.design_system import apply_design_system
 from ui.home import render_home
+from ui.sidebar import render_session_snapshot, render_sidebar_footer, render_sidebar_header
 
 from spotify_client import (
     api_from_token, authorize, build_web_authorization, discover_fill_tracks,
@@ -174,10 +175,12 @@ if is_web_spotify and client_id and not token and oauth_state_secret:
     )["url"]
 
 with st.sidebar:
-    st.header("연결 상태")
+    render_sidebar_header()
+    render_session_snapshot()
+    st.markdown('<div class="dpc-side-section-title">CONNECTIONS</div>', unsafe_allow_html=True)
     st.write("Spotify", "🟢 로그인 유지 중" if token else "⚪ 연결 필요")
     st.write("Last.fm", "🟢 Key 저장됨" if lastfm_api_key else "⚪ 설정 필요")
-    st.caption("API 정보는 ⚙️ 설정 탭에서 한 번만 저장하면 됩니다.")
+    st.caption("API 정보는 SETTINGS 탭에서 한 번만 저장하면 됩니다.")
     if is_web_spotify and client_id and not oauth_state_secret:
         st.warning("Streamlit Secrets에 [app] oauth_state_secret을 추가해야 Spotify 로그인을 사용할 수 있습니다.")
     if is_web_spotify:
@@ -202,11 +205,12 @@ with st.sidebar:
         st.success("로그인 정보를 삭제했습니다.")
         st.rerun()
     st.divider()
-    st.markdown("**Redirect URI**")
-    st.code(redirect_uri, language=None)
+    with st.expander("Redirect URI"):
+        st.code(redirect_uri, language=None)
+    render_sidebar_footer()
 
 home_tab, load_tab, online_tab, build_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs([
-    "⌂ HOME", "♫ LIBRARY", "✦ CANDIDATES", "◈ CURRENT SET", "▦ PLANNER", "▥ ANALYTICS", "AI ASSISTANT", "⚙ SETTINGS", "? GUIDE"
+    "⌂ HOME", "♫ LIBRARY", "✦ CANDIDATES", "▦ PLANNER", "⇧ EXPORT", "AI ASSISTANT", "▥ ANALYTICS", "⚙ SETTINGS", "? GUIDE"
 ])
 
 with home_tab:

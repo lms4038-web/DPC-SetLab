@@ -19,11 +19,10 @@ def _status_card(label: str, value: str, sub: str, accent: bool = False) -> str:
 
 def _workflow(active_step: int) -> str:
     steps = [
-        ("01", "LIBRARY", "Rekordbox 후보곡"),
-        ("02", "CONTEXT", "공연 상황 설정"),
-        ("03", "BUILD", "AI 세트 생성"),
-        ("04", "REFINE", "보충·재분석"),
-        ("05", "PERFORM", "플랜 검토"),
+        ("01", "LIBRARY", "Rekordbox 불러오기"),
+        ("02", "CANDIDATES", "후보곡 확정·보강"),
+        ("03", "PLANNER", "AI 생성·세트 검토"),
+        ("04", "EXPORT", "Spotify 내보내기"),
     ]
     cards: list[str] = []
     for index, (num, name, desc) in enumerate(steps, start=1):
@@ -32,19 +31,36 @@ def _workflow(active_step: int) -> str:
             f'<div class="dpc-step{active}"><div class="num">STEP {num}</div>'
             f'<div class="name">{name}</div><div class="desc">{desc}</div></div>'
         )
-    return '<div class="dpc-workflow">' + "".join(cards) + "</div>"
+    return '<div class="dpc-workflow dpc-workflow-four">' + "".join(cards) + "</div>"
 
 
 def detect_current_step(state: Any) -> int:
-    if state.get("performance_plan") is not None:
-        return 5
+    if state.get("spotify_export_complete"):
+        return 4
     if state.get("set_df") is not None:
         return 4
     if state.get("candidate_df") is not None:
-        return 2
+        return 3
     if state.get("raw_collection") is not None:
         return 2
     return 1
+
+
+def _session_guide(active_step: int, spotify_connected: bool) -> tuple[str, str, str, list[tuple[str, bool]]]:
+    guide = {
+        1: ("LIBRARY", "Rekordbox XML 또는 CSV를 불러오세요.", "상단 LIBRARY 탭"),
+        2: ("CANDIDATES", "공연에 사용할 후보곡을 확정하고 필요한 메타데이터를 보강하세요.", "상단 CANDIDATES 탭"),
+        3: ("PLANNER", "공연 시간과 프리셋을 정하고 AI 세트를 생성한 뒤 결과를 검토하세요.", "상단 PLANNER 탭"),
+        4: ("EXPORT", "완성된 세트를 Spotify 플레이리스트로 내보내세요.", "상단 EXPORT 탭"),
+    }
+    current, action, location = guide[active_step]
+    checks = [
+        ("라이브러리 불러오기", active_step > 1),
+        ("후보곡 확정", active_step > 2),
+        ("AI 세트 생성", active_step > 3),
+        ("Spotify 연결", spotify_connected),
+    ]
+    return current, action, location, checks
 
 
 def render_home(*, spotify_connected: bool, lastfm_configured: bool) -> None:
@@ -60,8 +76,8 @@ def render_home(*, spotify_connected: bool, lastfm_configured: bool) -> None:
     st.markdown(
         """
         <div class="dpc-brandline">
-          <div class="dpc-kicker">PROJECT ORCHESTRA · SPRINT 1A · PATCH 01</div>
-          <div class="dpc-version">4.0.1-dev</div>
+          <div class="dpc-kicker">PROJECT ORCHESTRA · SPRINT 1A · PATCH 02</div>
+          <div class="dpc-version">4.0.2-dev</div>
         </div>
         <section class="dpc-hero">
           <div class="dpc-kicker">DJ PERFORMANCE PLANNING SYSTEM</div>
@@ -88,31 +104,40 @@ def render_home(*, spotify_connected: bool, lastfm_configured: bool) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
     st.markdown(
-        '<div class="dpc-section-head"><h2>PERFORMANCE WORKFLOW</h2><span>보라색 단계가 현재 위치</span></div>',
+        '<div class="dpc-section-head"><h2>SESSION WORKFLOW</h2><span>상단 핵심 메뉴와 같은 이름으로 진행됩니다</span></div>',
         unsafe_allow_html=True,
     )
     st.markdown(_workflow(active_step), unsafe_allow_html=True)
 
     left, right = st.columns([1.35, 1])
     with left:
-        st.markdown("### Start a session")
-        if library_count == 0:
-            st.markdown(
-                '<div class="dpc-empty"><b>첫 단계: 라이브러리 불러오기</b><br><br>'
-                '상단의 <b>Library</b> 탭에서 Rekordbox XML 또는 CSV를 업로드하세요. '
-                '샘플 데이터로 먼저 테스트할 수도 있습니다.</div>',
-                unsafe_allow_html=True,
-            )
-        elif candidate_count == 0:
-            st.info("라이브러리가 준비되었습니다. Library 탭에서 사용할 플레이리스트와 후보곡을 확정하세요.")
-        elif set_count == 0:
-            st.info("후보곡이 준비되었습니다. Set Builder 탭에서 공연 프리셋과 목표 시간을 정해 첫 세트를 생성하세요.")
-        else:
-            preset = st.session_state.get("build_preset_label", "Custom Session")
-            st.success(f"현재 세트가 준비되었습니다 · {preset}")
+        current, next_action, next_location, checks = _session_guide(active_step, spotify_connected)
+        progress = int(((active_step - 1) / 3) * 100)
+        checklist_html = "".join(
+            f'<div class="dpc-guide-check {"done" if done else "pending"}"><span>{"✓" if done else "○"}</span>{label}</div>'
+            for label, done in checks
+        )
+        guide_html = f"""
+        <div class="dpc-guide">
+          <div class="dpc-guide-top">
+            <div><div class="dpc-kicker">SESSION GUIDE</div><h3>현재 단계 · {current}</h3></div>
+            <div class="dpc-guide-percent">{progress}%</div>
+          </div>
+          <div class="dpc-progress"><span style="width:{progress}%"></span></div>
+          <div class="dpc-guide-action">
+            <div class="label">NEXT ACTION</div>
+            <b>{next_action}</b>
+            <p>{next_location}에서 계속할 수 있습니다.</p>
+          </div>
+          <div class="dpc-guide-checks">{checklist_html}</div>
+        </div>
+        """
+        st.markdown(guide_html, unsafe_allow_html=True)
+        if set_count and isinstance(result, pd.DataFrame):
             preview_columns = [c for c in ["order", "artist", "title", "bpm", "key", "energy"] if c in result.columns]
             if preview_columns:
-                st.dataframe(result[preview_columns].head(6), use_container_width=True, hide_index=True)
+                with st.expander("현재 세트 미리보기"):
+                    st.dataframe(result[preview_columns].head(6), use_container_width=True, hide_index=True)
     with right:
         st.markdown("### System check")
         checks = pd.DataFrame(
@@ -125,4 +150,4 @@ def render_home(*, spotify_connected: bool, lastfm_configured: bool) -> None:
         )
         st.dataframe(checks, use_container_width=True, hide_index=True)
         with st.expander("4.0 Sprint 1A 범위"):
-            st.markdown("- 공통 디자인 시스템\n- 제품형 Home 화면\n- UI 모듈 분리\n- 기존 3.2 기능 및 OAuth 유지")
+            st.markdown("- 공통 디자인 시스템\n- 제품형 Home 및 Sidebar\n- 동적 Session Guide\n- 기존 3.2 기능 및 OAuth 유지")

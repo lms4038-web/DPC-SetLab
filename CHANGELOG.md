@@ -1,3 +1,11 @@
+## 4.0.2-dev — Sprint 1A Patch 02
+
+- 상단 메뉴와 Session Workflow 이름 통일
+- Start a session을 동적 Session Guide로 교체
+- 현재 단계, 진행률, 다음 행동, 체크리스트 표시
+- DJ 프로필, 세션 스냅샷, 연결 상태를 포함한 제품형 사이드바 적용
+- Windows safe-area 및 기존 OAuth 기능 유지
+
 # Changelog
 
 ## 4.0.1-dev · Sprint 1A Patch 01
