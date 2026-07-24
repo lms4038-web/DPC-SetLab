@@ -1,3 +1,11 @@
+## 4.0.3-dev — Sprint 1A Patch 03
+- Current Set preview now displays the full set in a scrollable table instead of only six tracks.
+- Added a Spotify Set Player to the left sidebar.
+  - Before export: audition matched set tracks one at a time.
+  - After playlist export: play the full exported playlist in sequence.
+- Moved Spotify, Last.fm and Redirect URI connection controls into Settings.
+- Sidebar now focuses on session information and playback.
+
 ## 4.0.2-dev — Sprint 1A Patch 02
 
 - 상단 메뉴와 Session Workflow 이름 통일

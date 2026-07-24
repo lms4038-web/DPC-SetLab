@@ -76,8 +76,8 @@ def render_home(*, spotify_connected: bool, lastfm_configured: bool) -> None:
     st.markdown(
         """
         <div class="dpc-brandline">
-          <div class="dpc-kicker">PROJECT ORCHESTRA · SPRINT 1A · PATCH 02</div>
-          <div class="dpc-version">4.0.2-dev</div>
+          <div class="dpc-kicker">PROJECT ORCHESTRA · SPRINT 1A · PATCH 03</div>
+          <div class="dpc-version">4.0.3-dev</div>
         </div>
         <section class="dpc-hero">
           <div class="dpc-kicker">DJ PERFORMANCE PLANNING SYSTEM</div>
@@ -94,7 +94,7 @@ def render_home(*, spotify_connected: bool, lastfm_configured: bool) -> None:
         unsafe_allow_html=True,
     )
     spotify_value = "CONNECTED" if spotify_connected else "NOT CONNECTED"
-    spotify_sub = "플레이리스트 내보내기 준비됨" if spotify_connected else "사이드바에서 연결 필요"
+    spotify_sub = "플레이리스트 내보내기 준비됨" if spotify_connected else "SETTINGS에서 연결 필요"
     html = '<div class="dpc-card-grid">'
     html += _status_card("REKORDBOX LIBRARY", f"{library_count:,} TRACKS" if library_count else "EMPTY", "XML 또는 CSV 라이브러리")
     html += _status_card("ACTIVE CANDIDATES", f"{candidate_count:,} TRACKS" if candidate_count else "NOT SELECTED", "세트 생성에 사용할 후보")
@@ -136,8 +136,14 @@ def render_home(*, spotify_connected: bool, lastfm_configured: bool) -> None:
         if set_count and isinstance(result, pd.DataFrame):
             preview_columns = [c for c in ["order", "artist", "title", "bpm", "key", "energy"] if c in result.columns]
             if preview_columns:
-                with st.expander("현재 세트 미리보기"):
-                    st.dataframe(result[preview_columns].head(6), use_container_width=True, hide_index=True)
+                with st.expander(f"현재 세트 전체 보기 · {set_count}곡", expanded=False):
+                    preview_height = min(560, max(220, 38 * (set_count + 1)))
+                    st.dataframe(
+                        result[preview_columns],
+                        use_container_width=True,
+                        hide_index=True,
+                        height=preview_height,
+                    )
     with right:
         st.markdown("### System check")
         checks = pd.DataFrame(
