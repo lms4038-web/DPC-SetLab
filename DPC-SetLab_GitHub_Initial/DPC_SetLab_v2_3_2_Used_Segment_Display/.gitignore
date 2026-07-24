@@ -1,9 +1,0 @@
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-config.json
-.spotify_token.json
-online_metadata_cache.json
-.pytest_cache/
-.DS_Store

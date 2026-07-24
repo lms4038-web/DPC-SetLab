@@ -1,25 +1,9 @@
-# Python
 __pycache__/
 *.py[cod]
-*$py.class
-.pytest_cache/
 .venv/
 venv/
-env/
-
-# Local configuration and secrets
 config.json
-.env
-.env.*
-!.env.example
-
-# Generated output
-output/
-exports/
-*.log
-
-# OS / IDE
+.spotify_token.json
+online_metadata_cache.json
+.pytest_cache/
 .DS_Store
-Thumbs.db
-.vscode/
-.idea/
