@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.0.0-dev · Sprint 1A
+
+- Added the ORCHESTRA shared design system.
+- Added a new DJ-product-style Home dashboard.
+- Added live session status cards and workflow position detection.
+- Split UI code into reusable `ui/` modules.
+- Preserved all 3.2 planner, metadata, Spotify OAuth, and history features.
+- Updated app branding and version labels for the 4.0 development line.
+
 ## v3.2.0 — Performance Planner 2.0
 
 - Rekordbox Cue 이름에서 Intro, Build, Break, Drop, Outro 구조를 인식하는 `Song Structure Engine` 추가

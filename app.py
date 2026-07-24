@@ -18,6 +18,9 @@ from online_metadata import enrich_dataframe, test_lastfm_connection
 from playlist_intelligence import diagnose_playlist, display_playlist_path, playlist_options, playlist_summary
 from performance_planner import PerformancePlanSettings, apply_performance_plan
 from settings_manager import load_settings, save_settings
+from ui.design_system import apply_design_system
+from ui.home import render_home
+
 from spotify_client import (
     api_from_token, authorize, build_web_authorization, discover_fill_tracks,
     exchange_web_code, get_valid_token, get_valid_token_data, match_set, verify_web_state,
@@ -79,17 +82,8 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 3.2", page_icon="🎛️", layout="wide")
-st.markdown("""
-<style>
-.block-container {padding-top: 2rem; padding-bottom: 4rem;}
-[data-testid="stMetricValue"] {font-size: 1.6rem;}
-.small-note {color:#888; font-size:0.9rem;}
-div[role="radiogroup"] {gap: 0.45rem; flex-wrap: wrap;}
-div[role="radiogroup"] label {border: 1px solid rgba(128,128,128,.28); border-radius: .75rem; padding: .55rem .75rem; background: rgba(128,128,128,.05);}
-</style>
-""", unsafe_allow_html=True)
-
+st.set_page_config(page_title="DPC SetLab 4.0-dev", page_icon="◈", layout="wide")
+apply_design_system()
 
 
 def load_uploaded(name: str, data: bytes):
@@ -113,8 +107,7 @@ def load_uploaded(name: str, data: bytes):
 
 
 settings = load_settings(getattr(st, "secrets", None))
-st.title("🎛️ DPC SetLab 3.2")
-st.caption("공연 상황 설계 → AI 1차 세트 → Spotify 보충 → Rekordbox 재분석 → AI Final → 공연 리포트")
+
 
 client_id = str(settings.get("spotify", {}).get("client_id", "")).strip()
 redirect_uri = str(settings.get("spotify", {}).get("redirect_uri", "http://127.0.0.1:8888/callback")).strip()
@@ -212,7 +205,12 @@ with st.sidebar:
     st.markdown("**Redirect URI**")
     st.code(redirect_uri, language=None)
 
-load_tab, online_tab, build_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs(["1. 후보곡", "2. 온라인 보강", "3. AI 세트", "4. Spotify 보충", "5. AI 코치", "6. History 분석", "⚙️ 설정", "워크플로우"])
+home_tab, load_tab, online_tab, build_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs([
+    "◈ Home", "Library", "Metadata", "Set Builder", "Spotify", "AI Coach", "History", "Settings", "Guide"
+])
+
+with home_tab:
+    render_home(spotify_connected=bool(token), lastfm_configured=bool(lastfm_api_key))
 
 with load_tab:
     st.subheader("Rekordbox 라이브러리 불러오기")
@@ -941,7 +939,7 @@ with settings_tab:
     s1, s2, s3 = st.columns(3)
     s1.metric("Spotify", "Connected" if token else "Not connected")
     s2.metric("Last.fm", "Configured" if lastfm_api_key else "Not configured")
-    s3.metric("DPC SetLab", "v3.2.0")
+    s3.metric("DPC SetLab", "v4.0.0-dev")
     st.info("Streamlit Cloud에서는 config/settings.json 대신 App settings → Secrets에 키를 저장해야 재부팅 후에도 유지됩니다.")
     st.code('''[spotify]
 client_id = "YOUR_CLIENT_ID"
@@ -955,7 +953,7 @@ token = "OPTIONAL"''', language="toml")
 
 
 with guide_tab:
-    st.subheader("DPC SetLab 3.0 워크플로우")
+    st.subheader("DPC SetLab 4.0 워크플로우")
     st.markdown("""
 1. **Rekordbox 후보곡 불러오기**  
    Collection 또는 공연 후보 플레이리스트를 XML로 내보냅니다.

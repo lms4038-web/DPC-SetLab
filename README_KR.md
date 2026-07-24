@@ -1,4 +1,6 @@
-# DPC SetLab 2.2
+> 현재 빌드: **4.0.0-dev Sprint 1A** — 디자인 시스템, 신규 Home, UI 모듈화
+
+# DPC SetLab 4.0-dev · Project ORCHESTRA 2.2
 
 > DJ의 판단을 대신하지 않고, 더 빠르고 더 좋은 세트 준비를 돕는 AI 워크스페이스입니다.
 
