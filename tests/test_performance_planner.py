@@ -77,3 +77,46 @@ def test_used_segment_display_fields_are_generated():
     assert result.iloc[0]["set_range"].count("→") == 1
     assert result.iloc[0]["next_track_in_sec"] <= result.iloc[0]["mix_out_sec"]
     assert result.iloc[0]["next_track_in_sec"] >= result.iloc[0]["mix_in_sec"]
+
+
+def test_named_structure_cues_prefer_drop_for_peak_role():
+    cues = json.dumps([
+        {"name": "Intro", "start": 0.0},
+        {"name": "Break", "start": 48.0},
+        {"name": "Drop 1", "start": 80.0},
+        {"name": "Break 2", "start": 144.0},
+        {"name": "Drop 2", "start": 176.0},
+        {"name": "Outro", "start": 240.0},
+    ])
+    df = pd.DataFrame([
+        {"title": "Warm", "artist": "DJ", "bpm": 120, "duration_sec": 300, "energy": 5, "cue_points": "[]"},
+        {"title": "Peak", "artist": "DJ", "bpm": 120, "duration_sec": 300, "energy": 9, "comments": "peak", "cue_points": cues},
+        {"title": "Close", "artist": "DJ", "bpm": 120, "duration_sec": 300, "energy": 5, "cue_points": "[]"},
+    ])
+    settings = PerformancePlanSettings(average_play_sec=90, tolerance_sec=15, transition_bars=16, phrase_bars=16)
+    result = apply_performance_plan(df, settings)
+    peak = result.iloc[1]
+    assert peak["mix_in_sec"] >= 70
+    assert "drop" in peak["structure_source"]
+    assert peak["planned_play_sec"] <= peak["target_play_sec"] + 32.1
+
+
+def test_sparse_cues_do_not_force_near_full_track_playback():
+    cues = json.dumps([
+        {"name": "Intro", "start": 0.0},
+        {"name": "Outro", "start": 260.0},
+    ])
+    df = pd.DataFrame([
+        {"title": "Sparse", "artist": "DJ", "bpm": 120, "duration_sec": 300, "energy": 5, "cue_points": cues},
+        {"title": "End", "artist": "DJ", "bpm": 120, "duration_sec": 300, "energy": 5, "cue_points": "[]"},
+    ])
+    settings = PerformancePlanSettings(
+        average_play_sec=90,
+        tolerance_sec=15,
+        transition_bars=16,
+        phrase_bars=16,
+        variable_timing=False,
+    )
+    result = apply_performance_plan(df, settings)
+    assert result.iloc[0]["planned_play_sec"] <= 106
+    assert result.iloc[0]["structure_source"] == "BPM 기반 추정"

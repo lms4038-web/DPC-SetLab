@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from song_structure import safe_cues, select_structure_window
+
 
 ROLE_WEIGHTS = {
     "opening": 1.35,
@@ -40,18 +42,6 @@ def seconds_per_bar(bpm: float, beats_per_bar: int = 4) -> float:
     if bpm <= 0:
         return 2.0
     return (60.0 / bpm) * beats_per_bar
-
-
-def _safe_cues(value: Any) -> list[dict[str, Any]]:
-    if isinstance(value, list):
-        return value
-    if not value:
-        return []
-    try:
-        parsed = json.loads(str(value))
-        return parsed if isinstance(parsed, list) else []
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return []
 
 
 def infer_performance_role(position: int, total: int, energy: float, comments: str = "") -> str:
@@ -136,18 +126,29 @@ def plan_track(row: pd.Series, position: int, total: int, settings: PerformanceP
     role = infer_performance_role(position, total, energy, str(row.get("comments", "")))
     desired = _role_target_seconds(role, settings)
     desired = min(max(30.0, desired), max(30.0, duration_sec))
-    cues = _safe_cues(row.get("cue_points", ""))
+    cues = safe_cues(row.get("cue_points", ""))
     cue_times = _cue_candidates(cues, duration_sec)
-    cue_window = _select_window_from_cues(cue_times, desired, duration_sec, settings.tolerance_sec)
+    structure_window = select_structure_window(
+        cues=cues,
+        duration_sec=duration_sec,
+        desired_sec=desired,
+        role=role,
+        tolerance_sec=settings.tolerance_sec,
+    )
 
     bar_sec = seconds_per_bar(bpm)
-    if cue_window:
-        start, end = cue_window
-        raw_bars = max(settings.phrase_bars, round((end - start) / bar_sec / settings.phrase_bars) * settings.phrase_bars)
-        play_sec = min(duration_sec - start, raw_bars * bar_sec)
+    if structure_window:
+        start, suggested_end, source, confidence = structure_window
+        available = max(0.0, suggested_end - start)
+        raw_bars = max(
+            settings.phrase_bars,
+            round(available / bar_sec / settings.phrase_bars) * settings.phrase_bars,
+        )
+        # Never let a sparse cue span silently expand a 90-second request into a full track.
+        max_allowed = min(duration_sec - start, desired + max(settings.tolerance_sec, settings.phrase_bars * bar_sec))
+        play_sec = min(available, raw_bars * bar_sec, max_allowed)
         end = min(duration_sec, start + play_sec)
-        source = "Rekordbox Cue"
-        confidence = "높음" if len(cue_times) >= 3 else "중간"
+        raw_bars = max(settings.phrase_bars, int(round((end - start) / bar_sec / settings.phrase_bars)) * settings.phrase_bars)
     else:
         bars, play_sec = _nearest_phrase_duration(desired, bpm, settings.phrase_bars, settings.tolerance_sec, duration_sec)
         start = 0.0
@@ -165,8 +166,8 @@ def plan_track(row: pd.Series, position: int, total: int, settings: PerformanceP
     transition_sec = transition_bars * bar_sec
     effective_sec = max(20.0, (end - start) - (0 if position == 0 else transition_sec))
     reason = f"{ROLE_LABELS[role]} 역할에 맞춰 {raw_bars}마디 사용"
-    if source == "Rekordbox Cue":
-        reason += ", Cue 경계를 우선 적용"
+    if source.startswith("Rekordbox 구조 Cue"):
+        reason += ", 이름이 지정된 Cue와 역할별 선호 구간을 함께 적용"
     else:
         reason += ", 정확한 phrase 정보가 없어 BPM 기준 추정"
 

@@ -79,7 +79,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 3.1", page_icon="🎛️", layout="wide")
+st.set_page_config(page_title="DPC SetLab 3.2", page_icon="🎛️", layout="wide")
 st.markdown("""
 <style>
 .block-container {padding-top: 2rem; padding-bottom: 4rem;}
@@ -113,7 +113,7 @@ def load_uploaded(name: str, data: bytes):
 
 
 settings = load_settings(getattr(st, "secrets", None))
-st.title("🎛️ DPC SetLab 3.1")
+st.title("🎛️ DPC SetLab 3.2")
 st.caption("공연 상황 설계 → AI 1차 세트 → Spotify 보충 → Rekordbox 재분석 → AI Final → 공연 리포트")
 
 client_id = str(settings.get("spotify", {}).get("client_id", "")).strip()
@@ -485,7 +485,7 @@ with build_tab:
             q1, q2 = st.columns(2)
             phrase_bars = q1.selectbox("기본 프레이즈 단위", [8, 16, 32], index=1)
             transition_bars = q2.selectbox("기본 믹싱 길이", [8, 16, 32], index=1)
-            st.caption("Rekordbox Cue가 있으면 Cue 경계를 우선 사용하고, 없으면 BPM 기준으로 프레이즈를 추정합니다.")
+            st.caption("이름이 지정된 Rekordbox Cue(Intro·Break·Drop·Outro)를 곡 역할과 함께 해석합니다. 구조 Cue가 부족하면 BPM·마디 기준으로 안전하게 추정합니다.")
 
             with st.expander("⚙️ 고급 설정 — 프리셋 세부값 조정", expanded=(preset_key == "custom")):
                 st.caption("프리셋을 선택한 뒤 이 값을 조금씩 바꾸면 원하는 전개에 더 가깝게 조정할 수 있습니다.")
@@ -600,7 +600,7 @@ with build_tab:
                 ]
                 st.caption(
                     "사용 구간은 각 음원 파일 안의 위치입니다. ‘다음 곡 투입’부터 ‘사용 종료’까지가 전환 구간이며, "
-                    "Cue 데이터가 없는 곡은 BPM 기반 추정으로 표시됩니다."
+                    "구조 Cue가 충분하지 않은 곡은 BPM 기반 추정으로 표시되며, 설정한 평균 사용시간을 크게 넘기지 않습니다."
                 )
                 target_gap = float(result.attrs.get("target_gap_sec", 0) or 0)
                 tolerance = int(getattr(st.session_state.get("performance_plan_settings"), "tolerance_sec", 15))
@@ -941,7 +941,7 @@ with settings_tab:
     s1, s2, s3 = st.columns(3)
     s1.metric("Spotify", "Connected" if token else "Not connected")
     s2.metric("Last.fm", "Configured" if lastfm_api_key else "Not configured")
-    s3.metric("DPC SetLab", "v3.1.0")
+    s3.metric("DPC SetLab", "v3.2.0")
     st.info("Streamlit Cloud에서는 config/settings.json 대신 App settings → Secrets에 키를 저장해야 재부팅 후에도 유지됩니다.")
     st.code('''[spotify]
 client_id = "YOUR_CLIENT_ID"
