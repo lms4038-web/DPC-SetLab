@@ -22,7 +22,8 @@ import requests
 AUTH_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API_BASE = "https://api.spotify.com/v1"
-REDIRECT_URI = "http://127.0.0.1:8888/callback"
+LOCAL_REDIRECT_URI = "http://127.0.0.1:8888/callback"
+REDIRECT_URI = LOCAL_REDIRECT_URI
 SCOPES = "playlist-modify-private playlist-modify-public"
 TOKEN_FILE = Path(".spotify_token.json")
 
@@ -62,6 +63,72 @@ def _pkce_pair() -> tuple[str, str]:
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(64)).rstrip(b"=").decode()
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     return verifier, challenge
+
+
+
+
+def build_web_authorization(client_id: str, redirect_uri: str) -> dict[str, str]:
+    """Create a Spotify Authorization Code + PKCE request for a hosted web app."""
+    verifier, challenge = _pkce_pair()
+    state = secrets.token_urlsafe(24)
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "scope": SCOPES,
+        "state": state,
+        "code_challenge_method": "S256",
+        "code_challenge": challenge,
+    }
+    return {
+        "url": AUTH_URL + "?" + urllib.parse.urlencode(params),
+        "state": state,
+        "verifier": verifier,
+    }
+
+
+def exchange_web_code(client_id: str, redirect_uri: str, code: str, verifier: str) -> dict[str, Any]:
+    """Exchange a hosted callback code for a Spotify token using PKCE."""
+    response = requests.post(TOKEN_URL, data={
+        "client_id": client_id,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "code_verifier": verifier,
+    }, timeout=30)
+    response.raise_for_status()
+    token = response.json()
+    token["saved_at"] = int(time.time())
+    return token
+
+
+def refresh_token_data(client_id: str, token: dict[str, Any]) -> dict[str, Any]:
+    """Refresh an in-memory token without writing it to disk."""
+    response = requests.post(TOKEN_URL, data={
+        "grant_type": "refresh_token",
+        "refresh_token": token["refresh_token"],
+        "client_id": client_id,
+    }, timeout=30)
+    response.raise_for_status()
+    refreshed = response.json()
+    refreshed.setdefault("refresh_token", token["refresh_token"])
+    refreshed["saved_at"] = int(time.time())
+    return refreshed
+
+
+def get_valid_token_data(client_id: str, token: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Validate or refresh a token stored in Streamlit session state."""
+    if not token:
+        return None
+    expires_at = int(token.get("saved_at", 0)) + int(token.get("expires_in", 3600))
+    if time.time() < expires_at - 60:
+        return token
+    if token.get("refresh_token"):
+        try:
+            return refresh_token_data(client_id, token)
+        except requests.RequestException:
+            return None
+    return None
 
 
 def save_token(token: dict[str, Any]) -> None:
@@ -120,7 +187,7 @@ def authorize(client_id: str, timeout_sec: int = 180) -> dict[str, Any]:
     params = {
         "client_id": client_id,
         "response_type": "code",
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": LOCAL_REDIRECT_URI,
         "scope": SCOPES,
         "state": state,
         "code_challenge_method": "S256",
@@ -147,7 +214,7 @@ def authorize(client_id: str, timeout_sec: int = 180) -> dict[str, Any]:
         "client_id": client_id,
         "grant_type": "authorization_code",
         "code": result["code"],
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": LOCAL_REDIRECT_URI,
         "code_verifier": verifier,
     }, timeout=30)
     response.raise_for_status()

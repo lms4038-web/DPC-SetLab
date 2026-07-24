@@ -5,13 +5,14 @@ import os
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from collections.abc import Mapping
 
 SETTINGS_DIR = Path("config")
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 LEGACY_FILE = Path("config.json")
 
 DEFAULT_SETTINGS: dict[str, Any] = {
-    "spotify": {"client_id": ""},
+    "spotify": {"client_id": "", "redirect_uri": "http://127.0.0.1:8888/callback"},
     "lastfm": {"api_key": ""},
     "discogs": {"token": ""},
     "preferences": {
@@ -42,7 +43,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _legacy_to_settings(legacy: dict[str, Any]) -> dict[str, Any]:
     return {
-        "spotify": {"client_id": str(legacy.get("client_id", ""))},
+        "spotify": {"client_id": str(legacy.get("client_id", "")), "redirect_uri": "http://127.0.0.1:8888/callback"},
         "lastfm": {"api_key": str(legacy.get("lastfm_api_key", ""))},
         "discogs": {"token": str(legacy.get("discogs_token", ""))},
         "preferences": {
@@ -67,14 +68,19 @@ def load_settings(streamlit_secrets: Any | None = None) -> dict[str, Any]:
     except Exception:
         secrets = {}
 
-    spotify_secret = secrets.get("spotify", {}) if isinstance(secrets.get("spotify", {}), dict) else {}
-    lastfm_secret = secrets.get("lastfm", {}) if isinstance(secrets.get("lastfm", {}), dict) else {}
-    discogs_secret = secrets.get("discogs", {}) if isinstance(secrets.get("discogs", {}), dict) else {}
+    spotify_secret = dict(secrets.get("spotify", {})) if isinstance(secrets.get("spotify", {}), Mapping) else {}
+    lastfm_secret = dict(secrets.get("lastfm", {})) if isinstance(secrets.get("lastfm", {}), Mapping) else {}
+    discogs_secret = dict(secrets.get("discogs", {})) if isinstance(secrets.get("discogs", {}), Mapping) else {}
 
     settings["spotify"]["client_id"] = (
         os.getenv("SPOTIFY_CLIENT_ID")
         or spotify_secret.get("client_id")
         or settings["spotify"].get("client_id", "")
+    )
+    settings["spotify"]["redirect_uri"] = (
+        os.getenv("SPOTIFY_REDIRECT_URI")
+        or spotify_secret.get("redirect_uri")
+        or settings["spotify"].get("redirect_uri", "http://127.0.0.1:8888/callback")
     )
     settings["lastfm"]["api_key"] = (
         os.getenv("LASTFM_API_KEY")

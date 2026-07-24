@@ -38,3 +38,10 @@
 - Spotify 저장 로그인 자동 확인 및 연결 테스트 추가
 - Last.fm API Key 유효성 검사 추가
 - 민감한 로컬 설정 파일 Git 제외
+
+## 3.0.0
+- Streamlit Cloud용 Spotify Authorization Code + PKCE 지원
+- 웹/로컬 Redirect URI 자동 분기
+- 웹 토큰을 Streamlit session_state에 저장
+- Streamlit Secrets의 redirect_uri 지원
+- 설정 화면과 진단 정보 v3.0 업데이트
