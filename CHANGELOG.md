@@ -84,3 +84,8 @@
 
 - Streamlit Cloud용 Spotify PKCE OAuth 안정화
 - 서명된 OAuth state와 만료 검증 추가
+## 4.0.7 Home Fix
+- HOME을 기존 세션 대시보드가 아닌 전용 시작 화면으로 재구성
+- 현재 진행 상황을 Spotify / Rekordbox XML / AI Set / Edit / Export 5단계로 표시
+- 첫 사용자용 대형 `시작하기` 버튼과 단계별 Quick Start 안내 추가
+- 시작 전에는 Spotify 설정 영역을 숨겨 첫 화면의 정보 밀도를 낮춤

@@ -155,3 +155,46 @@ div[role="radiogroup"] label {border:1px solid var(--dpc-border);border-radius:.
 def apply_design_system() -> None:
     """Apply the shared 4.x visual system once per Streamlit rerun."""
     st.markdown(APP_CSS, unsafe_allow_html=True)
+
+# Patch 07 Home landing additions
+APP_CSS = APP_CSS.replace("</style>", r"""
+.dpc-home-landing {
+  text-align:center; padding:3.4rem 1.5rem 2.8rem; margin:.1rem 0 1.25rem;
+  border:1px solid var(--dpc-border); border-radius:1.45rem;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(139,92,246,.24), transparent 24rem),
+    linear-gradient(155deg, rgba(18,21,30,.98), rgba(10,12,18,.96));
+  box-shadow:0 28px 80px rgba(0,0,0,.3);
+}
+.dpc-home-eyebrow {color:var(--dpc-cyan);font-size:.72rem;font-weight:800;letter-spacing:.17em;}
+.dpc-home-logo {font-size:3rem;margin:.9rem 0 .35rem;filter:drop-shadow(0 0 22px rgba(139,92,246,.45));}
+.dpc-home-landing h1 {font-size:clamp(2.65rem,5vw,4.8rem);line-height:.95;letter-spacing:-.06em;margin:0;}
+.dpc-home-landing h2 {font-size:clamp(1rem,2vw,1.35rem);font-weight:500;color:#c5cad4;margin:.7rem 0 1rem;}
+.dpc-home-landing p {color:var(--dpc-muted);line-height:1.75;margin:0;}
+.dpc-home-overview-head {display:flex;align-items:flex-end;justify-content:space-between;margin:1.4rem .15rem .55rem;}
+.dpc-home-overview-head div {display:flex;flex-direction:column;gap:.18rem;}
+.dpc-home-overview-head span {color:var(--dpc-muted);font-size:.8rem;}
+.dpc-home-overview-head b {font-size:1.16rem;}
+.dpc-home-overview-head strong {font-size:1.3rem;color:#c4b5fd;}
+.dpc-home-progressbar {height:.48rem;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-bottom:.75rem;}
+.dpc-home-progressbar span {display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--dpc-purple),var(--dpc-cyan));}
+.dpc-home-progress {border:1px solid var(--dpc-border);border-radius:1.1rem;overflow:hidden;background:var(--dpc-panel);margin-bottom:1rem;}
+.dpc-home-progress-row {display:grid;grid-template-columns:2.6rem 1fr auto;gap:.85rem;align-items:center;padding:1rem 1.15rem;border-bottom:1px solid var(--dpc-border);}
+.dpc-home-progress-row:last-child {border-bottom:0;}
+.dpc-home-progress-row.current {background:linear-gradient(90deg,rgba(139,92,246,.17),rgba(34,211,238,.035));}
+.dpc-home-progress-row.done {background:rgba(52,211,153,.045);}
+.dpc-home-progress-icon {width:2rem;height:2rem;display:grid;place-items:center;border-radius:50%;border:1px solid rgba(255,255,255,.13);font-weight:800;color:var(--dpc-muted);}
+.dpc-home-progress-row.current .dpc-home-progress-icon {color:white;border-color:var(--dpc-purple);background:var(--dpc-purple);}
+.dpc-home-progress-row.done .dpc-home-progress-icon {color:#07110d;border-color:var(--dpc-green);background:var(--dpc-green);}
+.dpc-home-progress-copy {display:flex;flex-direction:column;gap:.15rem;}
+.dpc-home-progress-copy b {font-size:.98rem;}
+.dpc-home-progress-copy span {color:var(--dpc-muted);font-size:.79rem;}
+.dpc-home-progress-state {color:var(--dpc-muted);font-size:.75rem;}
+.dpc-home-progress-row.current .dpc-home-progress-state {color:#c4b5fd;font-weight:700;}
+.dpc-home-progress-row.done .dpc-home-progress-state {color:var(--dpc-green);}
+.dpc-home-next-card {display:grid;grid-template-columns:auto 1fr;gap:1rem;align-items:center;margin:1.2rem 0;padding:1.25rem;border:1px solid rgba(139,92,246,.38);border-radius:1rem;background:linear-gradient(135deg,rgba(139,92,246,.13),rgba(18,21,30,.9));}
+.dpc-home-next-step {font-size:.72rem;letter-spacing:.13em;color:var(--dpc-cyan);font-weight:800;}
+.dpc-home-next-card h3 {margin:0 0 .3rem;font-size:1.12rem;}
+.dpc-home-next-card p {margin:0;color:var(--dpc-muted);font-size:.84rem;}
+@media (max-width:720px){.dpc-home-progress-row{grid-template-columns:2.4rem 1fr}.dpc-home-progress-state{display:none}.dpc-home-landing br{display:none}}
+</style>""")

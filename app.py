@@ -199,42 +199,42 @@ with home_tab:
         set_ready=isinstance(st.session_state.get("set_df"), pd.DataFrame),
     )
 
-    st.markdown("### 1. Spotify 연결")
-    if token:
-        st.success("Spotify가 연결되어 있습니다. 다음으로 LIBRARY에서 Rekordbox XML을 불러오세요.")
-        if st.button("Spotify 연결 해제", key="home_spotify_disconnect", use_container_width=True):
-            if is_web_spotify:
-                st.session_state.pop("spotify_web_token", None)
-            else:
-                reset_token()
-            st.rerun()
-    elif not client_id:
-        st.warning("Spotify Client ID가 없습니다. SETTINGS에서 Client ID를 저장한 뒤 HOME으로 돌아오세요.")
-    elif is_web_spotify:
-        oauth_url = st.session_state.get("spotify_oauth_url")
-        if oauth_url:
-            st.link_button("Spotify 연결", oauth_url, type="primary", use_container_width=True)
-        else:
-            st.warning("OAuth State Secret을 SETTINGS 또는 Streamlit Secrets에 설정해주세요.")
-    else:
-        if st.button("Spotify 연결", type="primary", key="home_spotify_connect", use_container_width=True):
-            try:
-                with st.spinner("브라우저에서 Spotify 접근을 승인해주세요."):
-                    authorize(client_id)
+    if st.session_state.get("home_wizard_started", False) or bool(token):
+        st.markdown("### 1. Spotify 연결")
+        if token:
+            st.success("Spotify가 연결되어 있습니다. 다음으로 LIBRARY에서 Rekordbox XML을 불러오세요.")
+            if st.button("Spotify 연결 해제", key="home_spotify_disconnect", use_container_width=True):
+                if is_web_spotify:
+                    st.session_state.pop("spotify_web_token", None)
+                else:
+                    reset_token()
                 st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
+        elif not client_id:
+            st.warning("Spotify Client ID가 없습니다. SETTINGS에서 Client ID를 저장한 뒤 HOME으로 돌아오세요.")
+        elif is_web_spotify:
+            oauth_url = st.session_state.get("spotify_oauth_url")
+            if oauth_url:
+                st.link_button("Spotify 연결", oauth_url, type="primary", use_container_width=True)
+            else:
+                st.warning("OAuth State Secret을 SETTINGS 또는 Streamlit Secrets에 설정해주세요.")
+        else:
+            if st.button("Spotify 연결", type="primary", key="home_spotify_connect", use_container_width=True):
+                try:
+                    with st.spinner("브라우저에서 Spotify 접근을 승인해주세요."):
+                        authorize(client_id)
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
 
-    q1, q2 = st.columns(2)
-    with q1:
-        if st.button("다음 단계 · LIBRARY", use_container_width=True, disabled=not bool(token)):
-            st.session_state["onboarding_hint"] = "library"
-            st.info("상단 LIBRARY 탭을 눌러 Rekordbox XML을 업로드하세요.")
-    with q2:
-        if st.button("처음부터 다시 안내", use_container_width=True):
-            st.session_state["show_first_run"] = True
-            st.rerun()
-
+        q1, q2 = st.columns(2)
+        with q1:
+            if st.button("다음 단계 · LIBRARY", use_container_width=True, disabled=not bool(token)):
+                st.session_state["onboarding_hint"] = "library"
+                st.info("상단 LIBRARY 탭을 눌러 Rekordbox XML을 업로드하세요.")
+        with q2:
+            if st.button("처음부터 다시 안내", use_container_width=True):
+                st.session_state["show_first_run"] = True
+                st.rerun()
 with load_tab:
     st.subheader("Rekordbox 라이브러리 불러오기")
     st.caption("전체 Collection XML을 한 번 불러온 뒤, DPC SetLab 안에서 사용할 플레이리스트를 선택합니다.")
