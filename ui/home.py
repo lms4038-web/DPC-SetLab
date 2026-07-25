@@ -27,7 +27,7 @@ def detect_current_step(state: Any, spotify_connected: bool) -> int:
     if state.get("set_edit_complete"):
         return 6
     if isinstance(state.get("set_df"), pd.DataFrame):
-        return 5
+        return 5 if state.get("generate_review_complete") else 4
     if isinstance(state.get("candidate_df"), pd.DataFrame):
         return 4
     if isinstance(state.get("raw_collection"), pd.DataFrame):
@@ -43,7 +43,7 @@ def workflow_statuses(*, spotify_connected: bool) -> list[bool]:
         spotify_connected,
         isinstance(state.get("raw_collection"), pd.DataFrame),
         isinstance(state.get("candidate_df"), pd.DataFrame),
-        isinstance(state.get("set_df"), pd.DataFrame),
+        bool(state.get("generate_review_complete")),
         bool(state.get("set_edit_complete")),
         bool(state.get("spotify_export_complete") or state.get("rekordbox_export_complete")),
     ]
@@ -110,7 +110,7 @@ def render_home(*, spotify_connected: bool) -> str | None:
         1: ("STEP 1", "Spotify를 연결하세요.", "음악 검색과 Spotify Export에 사용됩니다.", "Spotify 연결", None),
         2: ("STEP 2", "Rekordbox XML을 불러오세요.", "Library에서 rekordbox.xml을 업로드하세요.", "LIBRARY 열기", "library"),
         3: ("STEP 3", "후보곡을 선택하세요.", "AI가 세트를 만들 때 사용할 곡을 정합니다.", "CANDIDATES 열기", "candidates"),
-        4: ("STEP 4", "AI 세트를 생성하세요.", "BPM, Key, Energy와 설정값을 바탕으로 순서를 만듭니다.", "GENERATE 열기", "generate"),
+        4: ("STEP 4", "AI 믹스셋을 생성하고 검토하세요.", "생성 결과와 전환 정보를 확인한 뒤 Edit으로 이동합니다.", "GENERATE 열기", "generate"),
         5: ("STEP 5", "세트를 검토하세요.", "곡 순서와 믹스 구간을 확인하고 저장하세요.", "EDIT 열기", "edit"),
         6: ("STEP 6", "세트를 내보내세요.", "Rekordbox XML 또는 Spotify Playlist로 완성합니다.", "EXPORT 열기", "export"),
     }

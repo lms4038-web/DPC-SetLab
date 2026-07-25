@@ -1,3 +1,14 @@
+# v5.0.3 Workflow Review & Reorder
+
+- 브라우저 새로고침 후에도 현재 작업 공간, 활성 탭, Spotify 연결, Rekordbox 라이브러리, 후보곡과 생성 세트를 복구하도록 세션 스냅샷을 추가했습니다.
+- DOM 클릭 스크립트를 제거하고 Streamlit 네이티브 탭 상태와 URL을 동기화해 Home의 다음 단계 이동을 안정화했습니다.
+- 첫 화면의 6단계 안내를 데스크톱에서 한 줄로 고정했습니다.
+- Generate 버튼 문구를 `이 프리셋으로 믹스셋 생성`으로 변경했습니다.
+- 생성 직후 Edit으로 자동 이동하지 않고, 요약·흐름·상세 결과 확인 체크리스트를 완료한 뒤 이동하도록 변경했습니다.
+- Edit에 한 칸 위/아래, 맨 위/아래 곡 순서 조정 기능을 추가하고 전환 및 공연 타임라인을 재계산합니다.
+- Export 설명을 다운로드한 업데이트 XML을 Rekordbox에서 활용하는 간단한 튜토리얼로 정리했습니다.
+- 자동 테스트 27개 통과.
+
 # v5.0.1 Wizard Hotfix
 
 - Fixed v5 Wizard CSS being rendered as visible source text.

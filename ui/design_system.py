@@ -230,12 +230,12 @@ APP_CSS = APP_CSS.replace("</style>", r"""
 .dpc-first-run-status{display:inline-flex;align-items:center;gap:.52rem;border:1px solid rgba(255,255,255,.10);border-radius:999px;padding:.48rem .78rem;font-size:.69rem;letter-spacing:.12em;color:#aeb4c1;background:rgba(255,255,255,.025)}
 .dpc-first-run-status i{width:.5rem;height:.5rem;border-radius:50%;display:block;background:var(--dpc-cyan);box-shadow:0 0 14px rgba(34,211,238,.7)}
 .dpc-first-run-status.connected i{background:var(--dpc-green);box-shadow:0 0 14px rgba(52,211,153,.7)}
-.dpc-first-run-flow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:center;gap:.55rem;border:1px solid var(--dpc-border);border-radius:1.1rem;padding:1rem 1.2rem;margin-bottom:1rem;background:rgba(17,20,29,.72)}
-.dpc-first-run-flow>div{position:relative;display:flex;flex-direction:column;gap:.15rem;padding:.55rem .8rem}.dpc-first-run-flow>div:not(:last-child):after{content:"→";position:absolute;right:-.48rem;top:50%;transform:translateY(-50%);color:#626978;font-size:.9rem}
+.dpc-first-run-flow{display:flex;flex-wrap:nowrap;align-items:center;gap:.55rem;border:1px solid var(--dpc-border);border-radius:1.1rem;padding:1rem 1.2rem;margin-bottom:1rem;background:rgba(17,20,29,.72);overflow-x:auto}
+.dpc-first-run-flow>div{position:relative;display:flex;flex:1 1 0;min-width:0;flex-direction:column;gap:.15rem;padding:.55rem .8rem}.dpc-first-run-flow>div:not(:last-child):after{content:"→";position:absolute;right:-.48rem;top:50%;transform:translateY(-50%);color:#626978;font-size:.9rem}
 .dpc-first-run-flow b{color:var(--dpc-cyan);font-size:.67rem;letter-spacing:.1em}
 .dpc-first-run-flow span{font-size:.88rem;font-weight:760}.dpc-first-run-flow small{font-size:.69rem;color:var(--dpc-muted)}
 .dpc-onboarding-stage{margin-top:1.2rem;padding:1.25rem;border:1px solid rgba(139,92,246,.30);border-radius:1rem;background:linear-gradient(145deg,rgba(139,92,246,.09),rgba(18,21,30,.88))}
-@media(max-width:850px){.dpc-first-run{min-height:500px}.dpc-first-run p br{display:none}.dpc-first-run-flow{grid-template-columns:repeat(3,minmax(0,1fr))}.dpc-first-run-flow>div:nth-child(3):after{display:none}}
+@media(max-width:850px){.dpc-first-run{min-height:500px}.dpc-first-run p br{display:none}.dpc-first-run-flow>div{flex:0 0 145px}}
 /* v5.0.1 Wizard Experience hotfix */
 .dpc-home-landing-compact{padding-bottom:1.25rem!important;text-align:center}
 .dpc-wizard-progress{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.55rem;margin:1rem 0 1.4rem}

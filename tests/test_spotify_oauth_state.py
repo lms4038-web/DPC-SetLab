@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from spotify_client import build_web_authorization, verify_web_state
+from spotify_client import build_web_authorization, verify_web_state, verify_web_state_details
 
 
 CLIENT_ID = "abc123client"
@@ -41,3 +41,10 @@ def test_state_expires():
     with patch("spotify_client.time.time", return_value=2000):
         with pytest.raises(ValueError):
             verify_web_state(_state_from_url(flow["url"]), CLIENT_ID, REDIRECT, SECRET, max_age_sec=600)
+
+
+def test_signed_state_preserves_browser_session_id():
+    session_id = "a" * 32
+    flow = build_web_authorization(CLIENT_ID, REDIRECT, SECRET, session_id=session_id)
+    details = verify_web_state_details(_state_from_url(flow["url"]), CLIENT_ID, REDIRECT, SECRET)
+    assert details["sid"] == session_id

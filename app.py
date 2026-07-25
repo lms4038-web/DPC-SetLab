@@ -5,12 +5,11 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 from dpc_core import (
     BuildSettings, ROLE_OPTIONS, ROLE_NORMAL, ROLE_START, ROLE_END, build_set, curve_value, export_set_csv, export_rekordbox_xml, export_m3u8, assess_rekordbox_export, filter_playlist,
     analyze_rekordbox_xml, assess_rekordbox_sync, sync_rekordbox_xml,
-    finalize_dataframe, format_seconds, parse_csv, parse_rekordbox_xml,
+    finalize_dataframe, format_seconds, parse_csv, parse_rekordbox_xml, recalculate_set_sequence,
 )
 from dpc_insights import (
     VENUE_PRESETS, AUDIENCE_PRESETS, MOOD_PRESETS, apply_context, explain_set,
@@ -20,64 +19,88 @@ from online_metadata import enrich_dataframe, test_lastfm_connection
 from playlist_intelligence import diagnose_playlist, display_playlist_path, playlist_options, playlist_summary
 from performance_planner import PerformancePlanSettings, apply_performance_plan
 from settings_manager import load_settings, save_settings
+from session_persistence import is_valid_session_id, new_session_id, purge_expired, restore_snapshot, save_snapshot
 from ui.design_system import apply_design_system
 from ui.home import render_first_run_landing, render_home
 from ui.sidebar import render_session_snapshot, render_set_player, render_sidebar_footer, render_sidebar_header
 
 from spotify_client import (
     api_from_token, authorize, build_web_authorization, discover_fill_tracks,
-    exchange_web_code, get_valid_token, get_valid_token_data, match_set, search_manual_tracks, verify_web_state,
+    exchange_web_code, get_valid_token, get_valid_token_data, match_set, search_manual_tracks, verify_web_state_details,
     reset_token, test_spotify_connection,
 )
 
 
 
 TAB_LABELS = {
-    "home": "HOME",
-    "library": "LIBRARY",
-    "candidates": "CANDIDATES",
-    "generate": "GENERATE",
-    "edit": "EDIT",
-    "export": "EXPORT",
+    "home": "⌂ HOME",
+    "library": "♫ LIBRARY",
+    "candidates": "✦ CANDIDATES",
+    "generate": "＋ GENERATE",
+    "edit": "✎ EDIT",
+    "export": "⇧ EXPORT",
+    "coach": "AI ASSISTANT",
+    "analytics": "▥ ANALYTICS",
+    "settings": "⚙ SETTINGS",
+    "help": "? HELP",
 }
+LABEL_TO_TAB = {label: key for key, label in TAB_LABELS.items()}
+
+
+def _query_value(name: str, default: str = "") -> str:
+    value = st.query_params.get(name)
+    if isinstance(value, list):
+        value = value[-1] if value else default
+    return str(value or default)
+
+
+session_id = _query_value("sid").lower()
+if not is_valid_session_id(session_id):
+    session_id = new_session_id()
+    st.query_params["sid"] = session_id
+
+if not st.session_state.get("_dpc_snapshot_restored"):
+    restore_snapshot(session_id, st.session_state)
+    st.session_state["_dpc_snapshot_restored"] = True
+    try:
+        purge_expired()
+    except Exception:
+        pass
+
+
+def persist_state() -> None:
+    try:
+        save_snapshot(session_id, st.session_state)
+    except Exception:
+        # Persistence is a recovery aid; it must never block core DJ features.
+        pass
+
 
 def request_tab(target: str) -> None:
-    """Persist the requested workspace tab in both session state and the URL."""
+    """Select a workspace tab using native Streamlit tab state and the URL."""
     target = target if target in TAB_LABELS else "home"
+    label = TAB_LABELS[target]
     st.session_state["wizard_target_tab"] = target
+    st.query_params["sid"] = session_id
     st.query_params["workspace"] = "1"
     st.query_params["tab"] = target
+    persist_state()
 
-def apply_requested_tab() -> None:
-    """Select the requested Streamlit tab and keep it stable across browser reloads."""
-    target = str(st.query_params.get("tab") or st.session_state.get("wizard_target_tab") or "home").lower()
-    if target not in TAB_LABELS:
-        target = "home"
-    label = TAB_LABELS[target]
-    components.html(
-        f"""<script>
-        (() => {{
-          const wanted = {label!r};
-          let attempts = 0;
-          const selectTab = () => {{
-            attempts += 1;
-            try {{
-              const doc = window.parent.document;
-              const tabs = [...doc.querySelectorAll('[role="tab"], button[data-baseweb="tab"]')];
-              const match = tabs.find(el => (el.textContent || '').trim().toUpperCase().includes(wanted));
-              if (match) {{
-                match.click();
-                match.scrollIntoView({{block:'nearest', inline:'center'}});
-                return;
-              }}
-            }} catch (err) {{ console.debug('DPC tab navigation retry', err); }}
-            if (attempts < 50) window.setTimeout(selectTab, 120);
-          }};
-          selectTab();
-        }})();
-        </script>""",
-        height=0,
-    )
+
+def sync_tab_to_url() -> None:
+    label = str(st.session_state.get("workspace_tabs") or TAB_LABELS["home"])
+    target = LABEL_TO_TAB.get(label, "home")
+    st.session_state["wizard_target_tab"] = target
+    st.query_params["sid"] = session_id
+    st.query_params["workspace"] = "1"
+    st.query_params["tab"] = target
+    persist_state()
+
+
+def requested_tab_key() -> str:
+    target = _query_value("tab", str(st.session_state.get("wizard_target_tab") or "home")).lower()
+    return target if target in TAB_LABELS else "home"
+
 
 SAMPLE_XML = Path("samples/sample_rekordbox.xml")
 SAMPLE_CSV = Path("samples/sample_tracks.csv")
@@ -134,7 +157,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 5.0.2", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 5.0.3", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -162,6 +185,23 @@ def load_uploaded(name: str, data: bytes):
     st.session_state.pop("candidate_selection_signature", None)
     st.session_state.pop("set_df", None)
     st.session_state.pop("spotify_matches", None)
+    st.session_state["generate_review_complete"] = False
+    st.session_state["set_edit_complete"] = False
+    st.session_state["spotify_export_complete"] = False
+    st.session_state["rekordbox_export_complete"] = False
+    persist_state()
+
+
+def rebuild_after_manual_order(df: pd.DataFrame) -> pd.DataFrame:
+    build_settings = st.session_state.get("build_settings")
+    if not isinstance(build_settings, BuildSettings):
+        build_settings = None
+    updated = recalculate_set_sequence(df, build_settings)
+    performance_settings = st.session_state.get("performance_plan_settings")
+    if isinstance(performance_settings, PerformancePlanSettings):
+        target_sec = int(st.session_state.get("build_target_sec") or 0) or None
+        updated = apply_performance_plan(updated, performance_settings, target_sec)
+    return updated
 
 
 settings = load_settings(getattr(st, "secrets", None))
@@ -177,28 +217,41 @@ default_playlist_name = str(settings.get("preferences", {}).get("playlist_name",
 default_public = bool(settings.get("preferences", {}).get("public_playlist", False))
 auto_connect = bool(settings.get("preferences", {}).get("auto_connect", True))
 
-# Spotify hosted OAuth callback processing. Web tokens stay in this browser session;
-# local tokens continue to use .spotify_token.json on the user's computer.
+# Spotify hosted OAuth callback processing. The signed state carries the browser
+# session id so the same workspace can be restored after the external round trip.
 if is_web_spotify and client_id:
-    oauth_error = st.query_params.get("error")
-    oauth_code = st.query_params.get("code")
-    oauth_state = st.query_params.get("state")
+    oauth_error = _query_value("error")
+    oauth_code = _query_value("code")
+    oauth_state = _query_value("state")
     if oauth_error:
         st.error(f"Spotify 승인이 취소되었거나 실패했습니다: {oauth_error}")
         st.query_params.clear()
+        st.query_params["sid"] = session_id
     elif oauth_code:
         try:
-            verifier = verify_web_state(
-                str(oauth_state or ""), client_id, redirect_uri, oauth_state_secret
+            verified = verify_web_state_details(
+                oauth_state, client_id, redirect_uri, oauth_state_secret
             )
+            callback_sid = str(verified.get("sid") or session_id).lower()
+            if not is_valid_session_id(callback_sid):
+                callback_sid = session_id
             st.session_state["spotify_web_token"] = exchange_web_code(
-                client_id, redirect_uri, str(oauth_code), verifier
+                client_id, redirect_uri, oauth_code, str(verified["v"])
             )
+            st.session_state["workspace_entered"] = True
+            st.session_state["home_wizard_started"] = True
+            st.session_state["wizard_mode"] = True
+            st.session_state["wizard_target_tab"] = "library"
+            st.session_state["workspace_tabs"] = TAB_LABELS["library"]
+            save_snapshot(callback_sid, st.session_state)
             st.query_params.clear()
-            st.success("Spotify 연결이 완료되었습니다.")
+            st.query_params["sid"] = callback_sid
+            st.query_params["workspace"] = "1"
+            st.query_params["tab"] = "library"
             st.rerun()
         except Exception as exc:
             st.query_params.clear()
+            st.query_params["sid"] = session_id
             st.error(f"Spotify 로그인 처리 실패: {exc}")
 
 
@@ -228,12 +281,12 @@ token = current_spotify_token()
 
 if is_web_spotify and client_id and not token and oauth_state_secret:
     st.session_state["spotify_oauth_url"] = build_web_authorization(
-        client_id, redirect_uri, oauth_state_secret
+        client_id, redirect_uri, oauth_state_secret, session_id=session_id
     )["url"]
 
 # Patch 08: true first-run experience. Until the user enters the workspace,
 # no sidebar, tab bar, dashboard cards, or advanced modules are rendered.
-workspace_entered = bool(st.session_state.get("workspace_entered", False)) or str(st.query_params.get("workspace", "")) == "1"
+workspace_entered = bool(st.session_state.get("workspace_entered", False)) or _query_value("workspace") == "1"
 if workspace_entered:
     st.session_state["workspace_entered"] = True
 if not workspace_entered:
@@ -244,15 +297,19 @@ if not workspace_entered:
         with c1:
             if st.button("시작하기", type="primary", use_container_width=True, key="landing_start"):
                 st.session_state["landing_started"] = True
+                persist_state()
                 st.rerun()
         with c2:
             if st.button("기존 작업 공간 열기", use_container_width=True, key="landing_skip"):
+                st.query_params["sid"] = session_id
                 st.query_params["workspace"] = "1"
                 st.query_params["tab"] = "home"
                 st.session_state["workspace_entered"] = True
                 st.session_state["home_wizard_started"] = True
+                persist_state()
                 st.rerun()
         st.caption("처음 사용한다면 ‘시작하기’를 눌러 Spotify 연결부터 진행하세요.")
+        persist_state()
         st.stop()
 
     # Spotify OAuth가 끝났다면 중간 진행표를 보여주지 않고 Library로 바로 이동합니다.
@@ -315,6 +372,7 @@ if not workspace_entered:
             request_tab("library")
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
+    persist_state()
     st.stop()
 
 with st.sidebar:
@@ -323,10 +381,17 @@ with st.sidebar:
     render_set_player()
     render_sidebar_footer()
 
-home_tab, load_tab, online_tab, build_tab, edit_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs([
-    "⌂ HOME", "♫ LIBRARY", "✦ CANDIDATES", "＋ GENERATE", "✎ EDIT", "⇧ EXPORT", "AI ASSISTANT", "▥ ANALYTICS", "⚙ SETTINGS", "? HELP"
-])
-apply_requested_tab()
+active_tab_key = requested_tab_key()
+active_tab_label = TAB_LABELS[active_tab_key]
+if st.session_state.get("workspace_tabs") != active_tab_label:
+    st.session_state["workspace_tabs"] = active_tab_label
+
+home_tab, load_tab, online_tab, build_tab, edit_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs(
+    list(TAB_LABELS.values()),
+    default=active_tab_label,
+    key="workspace_tabs",
+    on_change=sync_tab_to_url,
+)
 
 with home_tab:
     requested_home_target = render_home(spotify_connected=bool(token))
@@ -685,7 +750,7 @@ with build_tab:
                 bpm_weight = w3.slider("BPM 흐름 중요도", 0.0, 1.0, float(preset["bpm_weight"]), 0.05, key=f"bpm_weight_{preset_key}")
                 artist_gap = st.slider("같은 아티스트 재등장 최소 간격", 0, 8, int(preset["artist_gap"]), key=f"artist_gap_{preset_key}")
 
-            generate = st.form_submit_button("이 프리셋으로 DPC 세트 생성", type="primary", use_container_width=True)
+            generate = st.form_submit_button("이 프리셋으로 믹스셋 생성", type="primary", use_container_width=True)
         if generate:
             if start_track_token != "__AUTO__" and start_track_token == end_track_token:
                 st.error("시작곡과 마지막곡은 서로 다른 곡으로 선택해주세요.")
@@ -730,6 +795,7 @@ with build_tab:
                         result = apply_performance_plan(result, performance_settings, int(target_minutes) * 60)
                         st.session_state["performance_plan_settings"] = performance_settings
                 st.session_state["set_df"] = result
+                st.session_state["set_revision"] = int(st.session_state.get("set_revision", 0)) + 1
                 st.session_state["build_settings"] = settings
                 # Streamlit rerun 과정에서 dataclass/DataFrame attrs가 유실될 수 있으므로
                 # Spotify 보충 탭에서 사용할 핵심 시간값은 단순 숫자로 별도 저장합니다.
@@ -739,10 +805,14 @@ with build_tab:
                 st.session_state["build_overlap_sec"] = int(overlap_sec)
                 st.session_state["selected_genres"] = selected_genres
                 st.session_state.pop("spotify_matches", None)
-                st.success("세트를 만들었습니다.")
-                if st.session_state.get("wizard_mode"):
-                    request_tab("edit")
-                    st.rerun()
+                st.session_state["generate_review_complete"] = False
+                st.session_state["set_edit_complete"] = False
+                st.session_state["spotify_export_complete"] = False
+                st.session_state["rekordbox_export_complete"] = False
+                for key in ["generate_check_summary", "generate_check_flow", "generate_check_details"]:
+                    st.session_state[key] = False
+                persist_state()
+                st.success("믹스셋을 생성했습니다. 아래 결과를 확인한 뒤 EDIT으로 이동하세요.")
             except Exception as exc:
                 st.error(str(exc))
 
@@ -851,13 +921,75 @@ with build_tab:
                 st.write(f"- {note}")
             st.download_button("공연 리포트 HTML 다운로드", make_html_report(result, notes), file_name="DPC_SetLab_Report.html", mime="text/html", use_container_width=True)
 
+            st.divider()
+            st.markdown("### 생성 결과 확인")
+            st.caption("아래 세 가지를 확인하면 EDIT 단계로 이동할 수 있습니다.")
+            check1 = st.checkbox("선곡 수와 예상 세트 길이를 확인했습니다.", key="generate_check_summary")
+            check2 = st.checkbox("BPM·에너지 흐름과 전환 주의 구간을 확인했습니다.", key="generate_check_flow")
+            check3 = st.checkbox("곡별 사용 구간과 AI 세트 해설을 확인했습니다.", key="generate_check_details")
+            review_ready = bool(check1 and check2 and check3)
+            if st.button(
+                "확인 완료 · EDIT으로 이동",
+                type="primary",
+                use_container_width=True,
+                disabled=not review_ready,
+                key="generate_review_to_edit",
+            ):
+                st.session_state["generate_review_complete"] = True
+                persist_state()
+                request_tab("edit")
+                st.rerun()
+
 with edit_tab:
     st.subheader("SET EDITOR")
     st.caption("AI가 생성한 순서와 메타데이터를 공연 전 최종 검토합니다. 변경 내용은 Export에 바로 반영됩니다.")
     result = st.session_state.get("set_df")
     if not isinstance(result, pd.DataFrame) or result.empty:
-        st.info("먼저 GENERATE에서 AI 세트를 생성하세요.")
+        st.info("먼저 GENERATE에서 AI 믹스셋을 생성하세요.")
     else:
+        if not st.session_state.get("generate_review_complete"):
+            st.info("Generate 결과 확인 전에도 편집할 수 있지만, 생성 자료를 먼저 확인하는 것을 권장합니다.")
+
+        st.markdown("### 곡 순서 조정")
+        st.caption("이동할 곡을 고른 뒤 버튼으로 위치를 바꾸세요. BPM·키 전환과 공연 타임라인은 새 순서에 맞춰 다시 계산됩니다.")
+        track_positions = list(range(len(result)))
+        selected_position = st.selectbox(
+            "이동할 곡",
+            track_positions,
+            format_func=lambda i: f"{i + 1:02d}. {result.iloc[i]['artist']} – {result.iloc[i]['title']}",
+            key="edit_reorder_track",
+        )
+        move1, move2, move3, move4 = st.columns(4)
+        move_up = move1.button("한 칸 위", use_container_width=True, disabled=selected_position <= 0, key="edit_move_up")
+        move_down = move2.button("한 칸 아래", use_container_width=True, disabled=selected_position >= len(result) - 1, key="edit_move_down")
+        move_top = move3.button("맨 위로", use_container_width=True, disabled=selected_position <= 0, key="edit_move_top")
+        move_bottom = move4.button("맨 아래로", use_container_width=True, disabled=selected_position >= len(result) - 1, key="edit_move_bottom")
+
+        target_position: int | None = None
+        if move_up:
+            target_position = selected_position - 1
+        elif move_down:
+            target_position = selected_position + 1
+        elif move_top:
+            target_position = 0
+        elif move_bottom:
+            target_position = len(result) - 1
+
+        if target_position is not None and target_position != selected_position:
+            order = list(range(len(result)))
+            moved = order.pop(selected_position)
+            order.insert(target_position, moved)
+            reordered = result.iloc[order].copy().reset_index(drop=True)
+            st.session_state["set_df"] = rebuild_after_manual_order(reordered)
+            st.session_state["set_revision"] = int(st.session_state.get("set_revision", 0)) + 1
+            st.session_state["set_edit_complete"] = False
+            st.session_state["spotify_export_complete"] = False
+            st.session_state["rekordbox_export_complete"] = False
+            persist_state()
+            st.rerun()
+
+        st.markdown("### 세부 값 편집")
+        st.caption("Order 숫자를 직접 바꿔 여러 곡을 한 번에 재정렬할 수도 있습니다.")
         editable_columns = [c for c in ["order", "title", "artist", "bpm", "camelot", "energy", "role", "comments"] if c in result.columns]
         disabled_columns = [c for c in editable_columns if c not in {"order", "energy", "role", "comments"}]
         edited_set = st.data_editor(
@@ -867,7 +999,7 @@ with edit_tab:
             height=560,
             disabled=disabled_columns,
             num_rows="fixed",
-            key="patch07_set_editor",
+            key=f"patch07_set_editor_{int(st.session_state.get('set_revision', 0))}",
         )
         c1, c2 = st.columns(2)
         with c1:
@@ -876,10 +1008,17 @@ with edit_tab:
                 for col in edited_set.columns:
                     updated[col] = edited_set[col].values
                 if "order" in updated.columns:
-                    updated = updated.sort_values("order", kind="stable").reset_index(drop=True)
-                    updated["order"] = range(1, len(updated) + 1)
+                    numeric_order = pd.to_numeric(updated["order"], errors="coerce")
+                    updated = updated.assign(_manual_order=numeric_order).sort_values(
+                        "_manual_order", kind="stable", na_position="last"
+                    ).drop(columns="_manual_order").reset_index(drop=True)
+                updated = rebuild_after_manual_order(updated)
                 st.session_state["set_df"] = updated
+                st.session_state["set_revision"] = int(st.session_state.get("set_revision", 0)) + 1
                 st.session_state["set_edit_complete"] = True
+                st.session_state["spotify_export_complete"] = False
+                st.session_state["rekordbox_export_complete"] = False
+                persist_state()
                 st.success("편집 내용을 저장했습니다. EXPORT에서 내보낼 수 있습니다.")
                 if st.session_state.get("wizard_mode"):
                     request_tab("export")
@@ -1124,32 +1263,19 @@ with spotify_tab:
 
 
     st.divider()
-    st.markdown("### 💿 Rekordbox XML Sync · ⭐ 추천")
-    st.caption("LIBRARY에서 불러온 원본 Rekordbox XML은 그대로 보존하고, 현재 세트 플레이리스트만 추가한 새 XML을 만듭니다.")
+    st.markdown("### 💿 Rekordbox로 내보내기")
+    st.caption("완성된 믹스셋이 포함된 업데이트 XML을 다운로드한 뒤 Rekordbox에서 플레이리스트로 가져옵니다.")
 
-    with st.expander("📖 Rekordbox XML 처음부터 끝까지 따라하기", expanded=False):
+    with st.expander("📖 다운로드한 XML을 Rekordbox에서 사용하는 방법", expanded=True):
         st.markdown("""
-#### A. Rekordbox에서 원본 XML 만들기
-1. Rekordbox를 **EXPORT 모드**로 실행합니다.
-2. 상단 메뉴에서 **File → Export Collection in xml format**을 선택합니다.
-3. 찾기 쉬운 위치에 `rekordbox.xml`로 저장합니다.
-4. DPC SetLab의 **LIBRARY** 탭에서 방금 만든 XML을 업로드합니다.
+1. 아래에서 **업데이트 XML 다운로드**를 누릅니다.
+2. Rekordbox에서 **Preferences → Advanced → Database**를 엽니다.
+3. **rekordbox xml** 파일 경로에 다운로드한 `*_updated.xml`을 지정합니다.
+4. 왼쪽 브라우저에서 **rekordbox xml → DPC SetLab** 폴더를 펼칩니다.
+5. 생성된 플레이리스트를 우클릭하고 **Import Playlist**를 선택합니다.
+6. 일반 **Playlists**에 들어온 세트를 확인한 뒤 USB로 Export합니다.
 
-#### B. DPC SetLab에서 세트 추가하기
-1. CANDIDATES와 PLANNER에서 세트를 완성합니다.
-2. 이 화면에서 플레이리스트 이름을 입력합니다.
-3. 검사 결과가 `READY`인 곡만 새 플레이리스트에 포함됩니다.
-4. **업데이트 XML 다운로드**와 **원본 백업 다운로드**를 모두 보관합니다.
-
-#### C. 수정된 XML을 Rekordbox에 적용하기
-1. Rekordbox에서 **Preferences → Advanced → Database**로 이동합니다.
-2. **rekordbox xml** 항목의 파일 경로에서 다운로드한 `*_updated.xml`을 지정합니다.
-3. Rekordbox 왼쪽 브라우저의 **rekordbox xml → DPC SetLab** 폴더를 펼칩니다.
-4. 새 플레이리스트를 우클릭해 **Import Playlist**를 선택합니다.
-5. 일반 **Playlists** 영역에 복사된 플레이리스트와 곡 연결 상태를 확인합니다.
-6. USB를 연결하고 해당 플레이리스트를 장치로 Export합니다.
-
-> XML 파일을 기존 파일 위에 직접 덮어쓰지 마세요. 문제가 있으면 원본 백업 XML을 다시 지정하면 됩니다.
+> 기존 XML 파일에 직접 덮어쓰지 말고, 함께 제공되는 원본 백업도 보관하세요.
 """)
 
     original_xml = st.session_state.get("rekordbox_xml_bytes")
@@ -1188,7 +1314,10 @@ with spotify_tab:
         with left:
             st.markdown("#### 업데이트 XML")
             st.info("기존 Collection과 기존 플레이리스트를 유지하고 `DPC SetLab` 폴더에 현재 세트를 추가합니다.")
-            st.download_button("업데이트 XML 다운로드", updated_xml, file_name=f"{safe_name}_updated.xml", mime="application/xml", use_container_width=True, disabled=ready_count == 0)
+            xml_downloaded = st.download_button("업데이트 XML 다운로드", updated_xml, file_name=f"{safe_name}_updated.xml", mime="application/xml", use_container_width=True, disabled=ready_count == 0)
+            if xml_downloaded:
+                st.session_state["rekordbox_export_complete"] = True
+                persist_state()
         with middle:
             st.markdown("#### 원본 백업")
             st.info("문제가 생기면 Rekordbox의 XML 경로를 이 파일로 다시 지정해 원래 상태로 돌아갈 수 있습니다.")
@@ -1297,6 +1426,7 @@ with settings_tab:
         reset_token()
         st.session_state.pop("spotify_web_token", None)
         st.session_state.pop("spotify_oauth_url", None)
+        persist_state()
         st.success("로그인 정보를 삭제했습니다.")
         st.rerun()
 
@@ -1364,7 +1494,7 @@ with settings_tab:
     s1, s2, s3 = st.columns(3)
     s1.metric("Spotify", "Connected" if token else "Not connected")
     s2.metric("Last.fm", "Configured" if lastfm_api_key else "Not configured")
-    s3.metric("DPC SetLab", "v4.0.6-dev")
+    s3.metric("DPC SetLab", "v5.0.3")
     st.info("Streamlit Cloud에서는 config/settings.json 대신 App settings → Secrets에 키를 저장해야 재부팅 후에도 유지됩니다.")
     st.code('''[spotify]
 client_id = "YOUR_CLIENT_ID"
@@ -1378,7 +1508,7 @@ token = "OPTIONAL"''', language="toml")
 
 
 with guide_tab:
-    st.subheader("DPC SetLab 4.0 워크플로우")
+    st.subheader("DPC SetLab 5.0 워크플로우")
     st.markdown("""
 1. **Rekordbox 후보곡 불러오기**  
    Collection 또는 공연 후보 플레이리스트를 XML로 내보냅니다.
@@ -1402,3 +1532,6 @@ with guide_tab:
    다음 곡 추천, 공연 해설, 과거 History 분석과 개인 스타일 학습을 사용합니다.
 """)
     st.info("Rekordbox의 스트리밍 곡이나 로컬 에디트가 Spotify에 없으면 매칭되지 않습니다. CSV 다운로드는 항상 사용할 수 있습니다.")
+
+# Save recoverable workflow data for browser refreshes.
+persist_state()

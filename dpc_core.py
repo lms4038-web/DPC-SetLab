@@ -594,6 +594,51 @@ def build_set(df: pd.DataFrame, settings: BuildSettings) -> pd.DataFrame:
     return rows
 
 
+def recalculate_set_sequence(df: pd.DataFrame, settings: BuildSettings | None = None) -> pd.DataFrame:
+    """Recalculate order-dependent fields after a DJ manually reorders tracks."""
+    rows = df.copy().reset_index(drop=True)
+    attrs = dict(getattr(df, "attrs", {}))
+    if rows.empty:
+        rows.attrs.update(attrs)
+        return rows
+
+    rows["order"] = range(1, len(rows) + 1)
+    positions = [i / max(len(rows) - 1, 1) for i in range(len(rows))]
+    if settings is not None:
+        rows["target_energy"] = [
+            round(curve_value(settings.curve, p, settings.start_energy, settings.peak_energy, settings.end_energy), 1)
+            for p in positions
+        ]
+        start_bpm = float(settings.start_bpm) if settings.start_bpm is not None else float(rows.iloc[0]["bpm"])
+        end_bpm = float(settings.end_bpm) if settings.end_bpm is not None else float(rows.iloc[-1]["bpm"])
+        rows["target_bpm"] = [round(start_bpm + (end_bpm - start_bpm) * p, 1) for p in positions]
+        overlap_sec = int(settings.overlap_sec)
+    else:
+        overlap_sec = 45
+
+    rows["bpm_change"] = [0.0] + [
+        round(float(rows.loc[i, "bpm"]) - float(rows.loc[i - 1, "bpm"]), 1)
+        for i in range(1, len(rows))
+    ]
+    rows["key_transition"] = ["시작"] + [
+        harmonic_relation(str(rows.loc[i - 1, "camelot"]), str(rows.loc[i, "camelot"]))
+        for i in range(1, len(rows))
+    ]
+    rows["transition_score"] = [100] + [
+        round(100 * (1 - harmonic_cost(str(rows.loc[i - 1, "camelot"]), str(rows.loc[i, "camelot"]))), 0)
+        for i in range(1, len(rows))
+    ]
+    cumulative: list[float] = []
+    total = 0.0
+    for index, duration in enumerate(rows["duration_sec"].astype(float)):
+        total += duration if index == 0 else max(30.0, duration - overlap_sec)
+        cumulative.append(total)
+    rows["set_time"] = [format_seconds(value) for value in cumulative]
+    rows.attrs.update(attrs)
+    rows.attrs["estimated_duration_sec"] = total
+    return rows
+
+
 def format_seconds(seconds: float) -> str:
     seconds = max(0, int(round(seconds)))
     hours, rem = divmod(seconds, 3600)
