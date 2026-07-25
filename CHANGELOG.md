@@ -1,3 +1,16 @@
+# Changelog
+
+## 4.0.7-dev · Sprint 2 · Patch 07
+
+### UX Overhaul
+- Home을 Spotify-first 온보딩 화면으로 개편
+- Spotify → XML → Generate → Edit → Export 5단계 Quick Start 적용
+- Rekordbox XML 생성 가이드를 Library 업로드 위치로 이동
+- Planner를 Generate와 Edit 흐름으로 분리
+- Set Editor와 공연 전 검토 체크리스트 추가
+- Help Center와 Rekordbox 후속 절차 문구 정리
+- 버전·Sprint 표기와 Home 상태 추적 갱신
+
 ## 4.0.6-dev — Sprint 1B Patch 06
 
 - Added Rekordbox XML Sync that preserves the uploaded Collection and existing playlists.

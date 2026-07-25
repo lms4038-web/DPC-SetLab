@@ -114,7 +114,7 @@ hr {border-color: var(--dpc-border) !important;}
 .dpc-accent {color:#c4b5fd;}
 
 .dpc-workflow {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.55rem;margin:.3rem 0 1.1rem;}
-.dpc-workflow-four {grid-template-columns:repeat(4,minmax(0,1fr));}
+.dpc-workflow-four {grid-template-columns:repeat(4,minmax(0,1fr));}.dpc-workflow-five{grid-template-columns:repeat(5,minmax(0,1fr));}
 .dpc-step {position:relative;border:1px solid var(--dpc-border);border-radius:.85rem;padding:.85rem;background:rgba(255,255,255,.018);min-height:96px;}
 .dpc-step.active {border-color:rgba(139,92,246,.68);background:linear-gradient(145deg,rgba(139,92,246,.18),rgba(255,255,255,.02));}
 .dpc-step .num {color:var(--dpc-cyan);font-size:.7rem;font-weight:800;letter-spacing:.12em;}

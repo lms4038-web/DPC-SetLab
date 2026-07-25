@@ -84,7 +84,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 4.0.6-dev", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 4.0.7-dev", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -187,16 +187,67 @@ with st.sidebar:
     render_set_player()
     render_sidebar_footer()
 
-home_tab, load_tab, online_tab, build_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs([
-    "⌂ HOME", "♫ LIBRARY", "✦ CANDIDATES", "▦ PLANNER", "⇧ EXPORT", "AI ASSISTANT", "▥ ANALYTICS", "⚙ SETTINGS", "? GUIDE"
+home_tab, load_tab, online_tab, build_tab, edit_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs([
+    "⌂ HOME", "♫ LIBRARY", "✦ CANDIDATES", "＋ GENERATE", "✎ EDIT", "⇧ EXPORT", "AI ASSISTANT", "▥ ANALYTICS", "⚙ SETTINGS", "? HELP"
 ])
 
 with home_tab:
-    render_home(spotify_connected=bool(token), lastfm_configured=bool(lastfm_api_key))
+    render_home(
+        spotify_connected=bool(token),
+        lastfm_configured=bool(lastfm_api_key),
+        xml_loaded=isinstance(st.session_state.get("raw_collection"), pd.DataFrame),
+        set_ready=isinstance(st.session_state.get("set_df"), pd.DataFrame),
+    )
+
+    st.markdown("### 1. Spotify 연결")
+    if token:
+        st.success("Spotify가 연결되어 있습니다. 다음으로 LIBRARY에서 Rekordbox XML을 불러오세요.")
+        if st.button("Spotify 연결 해제", key="home_spotify_disconnect", use_container_width=True):
+            if is_web_spotify:
+                st.session_state.pop("spotify_web_token", None)
+            else:
+                reset_token()
+            st.rerun()
+    elif not client_id:
+        st.warning("Spotify Client ID가 없습니다. SETTINGS에서 Client ID를 저장한 뒤 HOME으로 돌아오세요.")
+    elif is_web_spotify:
+        oauth_url = st.session_state.get("spotify_oauth_url")
+        if oauth_url:
+            st.link_button("Spotify 연결", oauth_url, type="primary", use_container_width=True)
+        else:
+            st.warning("OAuth State Secret을 SETTINGS 또는 Streamlit Secrets에 설정해주세요.")
+    else:
+        if st.button("Spotify 연결", type="primary", key="home_spotify_connect", use_container_width=True):
+            try:
+                with st.spinner("브라우저에서 Spotify 접근을 승인해주세요."):
+                    authorize(client_id)
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    q1, q2 = st.columns(2)
+    with q1:
+        if st.button("다음 단계 · LIBRARY", use_container_width=True, disabled=not bool(token)):
+            st.session_state["onboarding_hint"] = "library"
+            st.info("상단 LIBRARY 탭을 눌러 Rekordbox XML을 업로드하세요.")
+    with q2:
+        if st.button("처음부터 다시 안내", use_container_width=True):
+            st.session_state["show_first_run"] = True
+            st.rerun()
 
 with load_tab:
     st.subheader("Rekordbox 라이브러리 불러오기")
     st.caption("전체 Collection XML을 한 번 불러온 뒤, DPC SetLab 안에서 사용할 플레이리스트를 선택합니다.")
+    with st.expander("❓ Rekordbox XML 만드는 방법", expanded=not bool(st.session_state.get("raw_collection"))):
+        st.markdown("""
+1. Rekordbox를 실행합니다.
+2. 상단 메뉴에서 **File → Export Collection in xml format**을 선택합니다.
+3. 찾기 쉬운 위치에 XML을 저장합니다.
+4. 아래 업로드 영역에 XML을 끌어놓거나 **Browse files**를 누릅니다.
+
+> DPC SetLab은 업로드한 XML의 Collection과 기존 Playlist를 보존하고, Export 단계에서 새 DPC SetLab Playlist를 추가합니다.
+""")
+        st.caption("CSV는 테스트와 간단한 후보곡 작업용이며, Rekordbox Sync와 XML Backup은 XML 업로드에서만 사용할 수 있습니다.")
     c1, c2, c3 = st.columns([2, 1, 1])
     with c1:
         uploaded = st.file_uploader("Rekordbox XML 또는 CSV", type=["xml", "csv"], help="Rekordbox: File > Export Collection in xml format")
@@ -666,6 +717,45 @@ with build_tab:
                 st.write(f"- {note}")
             st.download_button("공연 리포트 HTML 다운로드", make_html_report(result, notes), file_name="DPC_SetLab_Report.html", mime="text/html", use_container_width=True)
 
+with edit_tab:
+    st.subheader("SET EDITOR")
+    st.caption("AI가 생성한 순서와 메타데이터를 공연 전 최종 검토합니다. 변경 내용은 Export에 바로 반영됩니다.")
+    result = st.session_state.get("set_df")
+    if not isinstance(result, pd.DataFrame) or result.empty:
+        st.info("먼저 GENERATE에서 AI 세트를 생성하세요.")
+    else:
+        editable_columns = [c for c in ["order", "title", "artist", "bpm", "camelot", "energy", "role", "comments"] if c in result.columns]
+        disabled_columns = [c for c in editable_columns if c not in {"order", "energy", "role", "comments"}]
+        edited_set = st.data_editor(
+            result[editable_columns],
+            use_container_width=True,
+            hide_index=True,
+            height=560,
+            disabled=disabled_columns,
+            num_rows="fixed",
+            key="patch07_set_editor",
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("편집 내용 저장", type="primary", use_container_width=True):
+                updated = result.copy()
+                for col in edited_set.columns:
+                    updated[col] = edited_set[col].values
+                if "order" in updated.columns:
+                    updated = updated.sort_values("order", kind="stable").reset_index(drop=True)
+                    updated["order"] = range(1, len(updated) + 1)
+                st.session_state["set_df"] = updated
+                st.session_state["set_edit_complete"] = True
+                st.success("편집 내용을 저장했습니다. EXPORT에서 내보낼 수 있습니다.")
+        with c2:
+            st.download_button("검토용 CSV 다운로드", export_set_csv(result), file_name="DPC_SetLab_Edit_Review.csv", mime="text/csv", use_container_width=True)
+        st.markdown("### 검토 체크리스트")
+        st.checkbox("시작곡과 마지막곡을 실제로 들어봤습니다.", key="edit_check_open_close")
+        st.checkbox("BPM 변화가 큰 전환을 확인했습니다.", key="edit_check_bpm")
+        st.checkbox("보컬 충돌과 브레이크 길이를 확인했습니다.", key="edit_check_vocal")
+        st.checkbox("모든 로컬 파일 경로를 확인했습니다.", key="edit_check_path")
+
+
 with spotify_tab:
     st.subheader("EXPORT CENTER")
     st.caption("완성한 세트를 감상용 Spotify 플레이리스트 또는 공연용 Rekordbox 파일로 내보냅니다.")
@@ -673,11 +763,11 @@ with spotify_tab:
     if "set_df" not in st.session_state:
         st.warning("먼저 ‘세트 만들기’에서 세트를 생성하세요.")
     elif not client_id.strip():
-        st.warning("왼쪽 사이드바에 Spotify Client ID를 입력하고 저장하세요.")
+        st.warning("SETTINGS에서 Spotify Client ID를 입력하고 저장하세요.")
     else:
         token = current_spotify_token()
         if not token:
-            st.info("왼쪽의 ‘Spotify 연결 / 재연결’을 먼저 누르세요.")
+            st.info("HOME에서 Spotify를 먼저 연결하세요.")
         else:
             set_df = st.session_state["set_df"]
             if st.button("Spotify 곡 매칭 시작", use_container_width=True):
