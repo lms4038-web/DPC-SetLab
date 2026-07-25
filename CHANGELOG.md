@@ -151,3 +151,12 @@
 - Automatically enter Library after Spotify OAuth completion.
 - Change connected-state navigation to the next workflow step instead of showing Start again.
 - Harden Home next-step tab navigation with persistent targets and longer DOM retry handling.
+
+## 5.0.5 - Mobile Theme & OAuth Hotfix
+
+- Split the v5 visual overrides into `styles/theme.css`, `base.css`, `components.css`, `desktop.css`, `tablet.css`, `mobile.css`, and `safari.css`.
+- Added a deterministic external theme loader while preserving the existing visual system.
+- Normalized dark styling for buttons, disabled controls, file uploader, expanders, inputs, menus, tabs, alerts, forms, metrics, tables, captions, and tooltips.
+- Added iPhone Safari appearance and text-fill safeguards, 16px mobile inputs, and 44–46px touch targets.
+- Replaced custom HTML Spotify OAuth anchors on onboarding and Home with the same Streamlit-native link-button component used by Settings.
+- Updated the app version to 5.0.5.

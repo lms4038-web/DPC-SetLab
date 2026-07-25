@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ui.theme_loader import load_external_theme
+
 
 APP_CSS = r"""
 <style>
@@ -155,6 +157,7 @@ div[role="radiogroup"] label {border:1px solid var(--dpc-border);border-radius:.
 def apply_design_system() -> None:
     """Apply the shared 4.x visual system once per Streamlit rerun."""
     st.markdown(APP_CSS, unsafe_allow_html=True)
+    load_external_theme()
 
 # Patch 07 Home landing additions
 APP_CSS = APP_CSS.replace("</style>", r"""

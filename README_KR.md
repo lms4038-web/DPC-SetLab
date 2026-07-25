@@ -1,8 +1,8 @@
-# DPC SetLab 5.0.3
+# DPC SetLab 5.0.5
 
 > DJ가 AI로 믹스셋을 생성하고 검토·편집·Export하는 과정을 처음 이용해도 놓치지 않도록 안내하는 워크스페이스입니다.
 
-## 5.0.3 핵심 흐름
+## 5.0.5 핵심 흐름
 
 1. Spotify 연결
 2. Rekordbox XML 불러오기

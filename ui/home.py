@@ -97,7 +97,7 @@ def render_home(*, spotify_connected: bool) -> str | None:
     st.markdown(
         """
         <section class="dpc-home-landing dpc-home-landing-compact">
-          <div class="dpc-home-eyebrow">DPC SETLAB 5.0 · AI DJ PERFORMANCE ASSISTANT</div>
+          <div class="dpc-home-eyebrow">DPC SETLAB 5.0.5 · AI DJ PERFORMANCE ASSISTANT</div>
           <h1>공연용 세트를 준비하세요.</h1>
           <p>현재 단계만 완료하면 다음 작업으로 바로 이어집니다.</p>
         </section>

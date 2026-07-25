@@ -21,6 +21,7 @@ from performance_planner import PerformancePlanSettings, apply_performance_plan
 from settings_manager import load_settings, save_settings
 from session_persistence import is_valid_session_id, new_session_id, purge_expired, restore_snapshot, save_snapshot
 from ui.design_system import apply_design_system
+from ui.components import render_spotify_oauth_link
 from ui.home import render_first_run_landing, render_home
 from ui.sidebar import render_session_snapshot, render_set_player, render_sidebar_footer, render_sidebar_header
 
@@ -157,7 +158,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 5.0.3", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 5.0.5", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -341,9 +342,10 @@ if not workspace_entered:
     elif is_web_spotify:
         oauth_url = st.session_state.get("spotify_oauth_url")
         if oauth_url:
-            st.markdown(
-                f'<a class="dpc-oauth-self" href="{oauth_url}" target="_self">Spotify 계정 연결</a>',
-                unsafe_allow_html=True,
+            render_spotify_oauth_link(
+                oauth_url,
+                label="Spotify 계정 연결",
+                key="landing_spotify_oauth",
             )
         else:
             st.warning("OAuth State Secret을 Settings 또는 Streamlit Secrets에 설정해야 합니다.")
@@ -407,9 +409,10 @@ with home_tab:
         elif is_web_spotify:
             oauth_url = st.session_state.get("spotify_oauth_url")
             if oauth_url:
-                st.markdown(
-                    f'<a class="dpc-oauth-self" href="{oauth_url}" target="_self">Spotify 연결</a>',
-                    unsafe_allow_html=True,
+                render_spotify_oauth_link(
+                    oauth_url,
+                    label="Spotify 연결",
+                    key="home_spotify_oauth",
                 )
             else:
                 st.warning("OAuth State Secret을 SETTINGS 또는 Streamlit Secrets에 설정해주세요.")
@@ -1409,11 +1412,11 @@ with settings_tab:
         st.warning("Streamlit Secrets에 [app] oauth_state_secret을 추가해야 Spotify 로그인을 사용할 수 있습니다.")
     if is_web_spotify:
         auth_url = st.session_state.get("spotify_oauth_url", "")
-        st.link_button(
-            "Spotify 연결 / 재연결",
+        render_spotify_oauth_link(
             auth_url or redirect_uri,
-            use_container_width=True,
+            label="Spotify 연결 / 재연결",
             disabled=not bool(client_id and auth_url and oauth_state_secret),
+            key="settings_spotify_oauth",
         )
     elif st.button("Spotify 연결 / 재연결", use_container_width=True, disabled=not bool(client_id), key="settings_spotify_connect"):
         try:
@@ -1494,7 +1497,7 @@ with settings_tab:
     s1, s2, s3 = st.columns(3)
     s1.metric("Spotify", "Connected" if token else "Not connected")
     s2.metric("Last.fm", "Configured" if lastfm_api_key else "Not configured")
-    s3.metric("DPC SetLab", "v5.0.3")
+    s3.metric("DPC SetLab", "v5.0.5")
     st.info("Streamlit Cloud에서는 config/settings.json 대신 App settings → Secrets에 키를 저장해야 재부팅 후에도 유지됩니다.")
     st.code('''[spotify]
 client_id = "YOUR_CLIENT_ID"

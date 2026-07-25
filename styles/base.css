@@ -1,0 +1,12 @@
+html, body, .stApp, [data-testid="stAppViewContainer"] {
+  color: var(--dpc-text);
+  background-color: var(--dpc-bg);
+}
+*, *::before, *::after { box-sizing: border-box; }
+p, label, span, small, div { text-rendering: optimizeLegibility; }
+hr { border-color: var(--dpc-border) !important; }
+
+/* Never let browser defaults create white controls in the dark theme. */
+button, input, textarea, select { color-scheme: dark; }
+input, textarea { caret-color: var(--dpc-text); }
+input::placeholder, textarea::placeholder { color: var(--dpc-disabled) !important; opacity: 1 !important; }

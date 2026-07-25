@@ -1,0 +1,21 @@
+/* Safari/iOS normalization. Safe in other browsers. */
+button, input, textarea, select, [role="button"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+button, a[data-testid="stLinkButton"], input, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+input:disabled, textarea:disabled, button:disabled {
+  opacity: 1;
+}
+@supports (-webkit-touch-callout: none) {
+  body { -webkit-text-size-adjust: 100%; }
+  input, textarea, select { font-size: 16px !important; }
+  [data-testid="stFileUploader"] button,
+  div.stButton > button,
+  div.stDownloadButton > button,
+  a[data-testid="stLinkButton"] {
+    -webkit-text-fill-color: currentColor !important;
+  }
+}
