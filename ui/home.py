@@ -78,15 +78,10 @@ def render_first_run_landing(*, spotify_connected: bool) -> None:
         </main>
         <section class="dpc-first-run-flow">
           <div><b>01</b><span>Spotify</span><small>계정 연결</small></div>
-          <div class="arrow">→</div>
           <div><b>02</b><span>Library</span><small>XML 업로드</small></div>
-          <div class="arrow">→</div>
           <div><b>03</b><span>Candidates</span><small>후보곡 선택</small></div>
-          <div class="arrow">→</div>
           <div><b>04</b><span>Generate</span><small>AI 세트 생성</small></div>
-          <div class="arrow">→</div>
           <div><b>05</b><span>Edit</span><small>공연 전 검토</small></div>
-          <div class="arrow">→</div>
           <div><b>06</b><span>Export</span><small>Rekordbox·Spotify</small></div>
         </section>
         """,

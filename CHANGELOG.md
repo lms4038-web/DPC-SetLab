@@ -132,3 +132,11 @@
 - Candidate save advances to Candidates in wizard mode.
 - Generate completion advances to Edit in wizard mode.
 - Added a Candidates → Generate continuation action.
+
+## 5.0.2 - Wizard State & Navigation Hotfix
+- Preserve workspace and active workflow tab in URL query parameters across browser reloads.
+- Keep the six-step landing guide on one row on desktop.
+- Fix DataFrame truth-value ValueError in the Library XML guide expander.
+- Automatically enter Library after Spotify OAuth completion.
+- Change connected-state navigation to the next workflow step instead of showing Start again.
+- Harden Home next-step tab navigation with persistent targets and longer DOM retry handling.

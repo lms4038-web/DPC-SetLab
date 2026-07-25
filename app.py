@@ -42,14 +42,18 @@ TAB_LABELS = {
 }
 
 def request_tab(target: str) -> None:
+    """Persist the requested workspace tab in both session state and the URL."""
+    target = target if target in TAB_LABELS else "home"
     st.session_state["wizard_target_tab"] = target
+    st.query_params["workspace"] = "1"
+    st.query_params["tab"] = target
 
 def apply_requested_tab() -> None:
-    """Select a Streamlit tab requested during the previous rerun."""
-    target = st.session_state.pop("wizard_target_tab", None)
-    if not target:
-        return
-    label = TAB_LABELS.get(target, target).upper()
+    """Select the requested Streamlit tab and keep it stable across browser reloads."""
+    target = str(st.query_params.get("tab") or st.session_state.get("wizard_target_tab") or "home").lower()
+    if target not in TAB_LABELS:
+        target = "home"
+    label = TAB_LABELS[target]
     components.html(
         f"""<script>
         (() => {{
@@ -62,18 +66,17 @@ def apply_requested_tab() -> None:
               const tabs = [...doc.querySelectorAll('[role="tab"], button[data-baseweb="tab"]')];
               const match = tabs.find(el => (el.textContent || '').trim().toUpperCase().includes(wanted));
               if (match) {{
-                match.dispatchEvent(new MouseEvent('mousedown', {{bubbles:true, view:window.parent}}));
                 match.click();
                 match.scrollIntoView({{block:'nearest', inline:'center'}});
                 return;
               }}
             }} catch (err) {{ console.debug('DPC tab navigation retry', err); }}
-            if (attempts < 20) window.setTimeout(selectTab, 100);
+            if (attempts < 50) window.setTimeout(selectTab, 120);
           }};
           selectTab();
         }})();
         </script>""",
-        height=1,
+        height=0,
     )
 
 SAMPLE_XML = Path("samples/sample_rekordbox.xml")
@@ -131,7 +134,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 5.0.1", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 5.0.2", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -230,11 +233,13 @@ if is_web_spotify and client_id and not token and oauth_state_secret:
 
 # Patch 08: true first-run experience. Until the user enters the workspace,
 # no sidebar, tab bar, dashboard cards, or advanced modules are rendered.
-workspace_entered = bool(st.session_state.get("workspace_entered", False))
+workspace_entered = bool(st.session_state.get("workspace_entered", False)) or str(st.query_params.get("workspace", "")) == "1"
+if workspace_entered:
+    st.session_state["workspace_entered"] = True
 if not workspace_entered:
     render_first_run_landing(spotify_connected=bool(token))
 
-    if not st.session_state.get("landing_started", False):
+    if not st.session_state.get("landing_started", False) and not token:
         c1, c2 = st.columns([1.35, 1])
         with c1:
             if st.button("시작하기", type="primary", use_container_width=True, key="landing_start"):
@@ -242,6 +247,8 @@ if not workspace_entered:
                 st.rerun()
         with c2:
             if st.button("기존 작업 공간 열기", use_container_width=True, key="landing_skip"):
+                st.query_params["workspace"] = "1"
+                st.query_params["tab"] = "home"
                 st.session_state["workspace_entered"] = True
                 st.session_state["home_wizard_started"] = True
                 st.rerun()
@@ -250,6 +257,8 @@ if not workspace_entered:
 
     # Spotify OAuth가 끝났다면 중간 진행표를 보여주지 않고 Library로 바로 이동합니다.
     if token:
+        st.query_params["workspace"] = "1"
+        st.query_params["tab"] = "library"
         st.session_state["workspace_entered"] = True
         st.session_state["home_wizard_started"] = True
         st.session_state["wizard_mode"] = True
@@ -351,7 +360,7 @@ with home_tab:
 with load_tab:
     st.subheader("Rekordbox 라이브러리 불러오기")
     st.caption("전체 Collection XML을 한 번 불러온 뒤, DPC SetLab 안에서 사용할 플레이리스트를 선택합니다.")
-    with st.expander("❓ Rekordbox XML 만드는 방법", expanded=not bool(st.session_state.get("raw_collection"))):
+    with st.expander("❓ Rekordbox XML 만드는 방법", expanded=not isinstance(st.session_state.get("raw_collection"), pd.DataFrame)):
         st.markdown("""
 1. Rekordbox를 실행합니다.
 2. 상단 메뉴에서 **File → Export Collection in xml format**을 선택합니다.
@@ -1253,6 +1262,7 @@ with history_tab:
 with settings_tab:
     if st.button("첫 시작 화면 다시 보기", use_container_width=True, key="reset_first_run_landing"):
         st.session_state["workspace_entered"] = False
+        st.query_params.clear()
         st.session_state["landing_started"] = False
         st.rerun()
     st.caption("온보딩 랜딩 화면과 Spotify-first 시작 흐름을 다시 확인할 수 있습니다.")
