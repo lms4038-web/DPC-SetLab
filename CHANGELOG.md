@@ -1,3 +1,12 @@
+## 5.0.0 · Wizard Experience
+
+- Home을 단계 안내 전용 Wizard 화면으로 단순화
+- Spotify → Library → Candidates → Generate → Edit → Export 6단계 진행 표시
+- Home의 불필요한 통계, 시스템 상태, Quick Start, 연결 해제·초기화 UI 제거
+- 현재 단계에 맞춰 `LIBRARY 열기`, `CANDIDATES 열기`, `GENERATE 열기`, `EDIT 열기`, `EXPORT 열기` 버튼 제공
+- 상단 탭은 유지해 사용자가 언제든 원하는 단계로 직접 이동 가능
+- AI 기능을 제품의 핵심 가치로 유지하고 Wizard는 초보 사용자의 접근성을 지원
+
 # Changelog
 
 ## 4.0.8-dev · Sprint 2 · Patch 08

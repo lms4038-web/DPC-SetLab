@@ -119,7 +119,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 4.0.9-dev", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 5.0.0", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -305,24 +305,15 @@ home_tab, load_tab, online_tab, build_tab, edit_tab, spotify_tab, coach_tab, his
 apply_requested_tab()
 
 with home_tab:
-    render_home(
-        spotify_connected=bool(token),
-        lastfm_configured=bool(lastfm_api_key),
-        xml_loaded=isinstance(st.session_state.get("raw_collection"), pd.DataFrame),
-        set_ready=isinstance(st.session_state.get("set_df"), pd.DataFrame),
-    )
+    requested_home_target = render_home(spotify_connected=bool(token))
+    if requested_home_target:
+        st.session_state["wizard_mode"] = True
+        request_tab(requested_home_target)
+        st.rerun()
 
-    if st.session_state.get("home_wizard_started", False) or bool(token):
-        st.markdown("### 1. Spotify 연결")
-        if token:
-            st.success("Spotify가 연결되어 있습니다. 다음으로 LIBRARY에서 Rekordbox XML을 불러오세요.")
-            if st.button("Spotify 연결 해제", key="home_spotify_disconnect", use_container_width=True):
-                if is_web_spotify:
-                    st.session_state.pop("spotify_web_token", None)
-                else:
-                    reset_token()
-                st.rerun()
-        elif not client_id:
+    if not token:
+        st.markdown("### Spotify 연결")
+        if not client_id:
             st.warning("Spotify Client ID가 없습니다. SETTINGS에서 Client ID를 저장한 뒤 HOME으로 돌아오세요.")
         elif is_web_spotify:
             oauth_url = st.session_state.get("spotify_oauth_url")
@@ -339,16 +330,6 @@ with home_tab:
                 except Exception as exc:
                     st.error(str(exc))
 
-        q1, q2 = st.columns(2)
-        with q1:
-            if st.button("다음 단계 · LIBRARY", use_container_width=True, disabled=not bool(token)):
-                st.session_state["wizard_mode"] = True
-                request_tab("library")
-                st.rerun()
-        with q2:
-            if st.button("처음부터 다시 안내", use_container_width=True):
-                st.session_state["show_first_run"] = True
-                st.rerun()
 with load_tab:
     st.subheader("Rekordbox 라이브러리 불러오기")
     st.caption("전체 Collection XML을 한 번 불러온 뒤, DPC SetLab 안에서 사용할 플레이리스트를 선택합니다.")

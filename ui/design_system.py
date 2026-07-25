@@ -237,4 +237,17 @@ APP_CSS = APP_CSS.replace("</style>", r"""
 .dpc-first-run-flow .arrow{color:#626978;font-size:.9rem}
 .dpc-onboarding-stage{margin-top:1.2rem;padding:1.25rem;border:1px solid rgba(139,92,246,.30);border-radius:1rem;background:linear-gradient(145deg,rgba(139,92,246,.09),rgba(18,21,30,.88))}
 @media(max-width:850px){.dpc-first-run{min-height:500px}.dpc-first-run p br{display:none}.dpc-first-run-flow{grid-template-columns:1fr}.dpc-first-run-flow .arrow{display:none}.dpc-first-run-flow>div:not(.arrow){border-bottom:1px solid var(--dpc-border)}.dpc-first-run-flow>div:last-child{border-bottom:0}}
-</style>""")
+</style>
+/* v5.0 Wizard Experience */
+.dpc-home-landing-compact{padding-bottom:1.25rem!important;text-align:center}
+.dpc-wizard-progress{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.55rem;margin:1rem 0 1.4rem}
+.dpc-wizard-step{display:flex;align-items:center;justify-content:center;gap:.45rem;padding:.7rem .45rem;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:rgba(255,255,255,.025);color:#7f8795;font-size:.82rem}
+.dpc-wizard-step span{display:grid;place-items:center;width:1.45rem;height:1.45rem;border-radius:999px;border:1px solid currentColor;font-size:.72rem}
+.dpc-wizard-step.done{color:#63d994;background:rgba(55,201,123,.08);border-color:rgba(55,201,123,.22)}
+.dpc-wizard-step.current{color:#fff;background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.25)}
+.dpc-wizard-card{text-align:center;max-width:760px;margin:0 auto 1rem;padding:2.4rem 2rem;border:1px solid rgba(255,255,255,.1);border-radius:20px;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018))}
+.dpc-wizard-card-step{font-size:.75rem;letter-spacing:.18em;color:#48dc8b;font-weight:800;margin-bottom:.8rem}
+.dpc-wizard-card h2{font-size:2rem;margin:.1rem 0 .65rem}
+.dpc-wizard-card p{color:#9ba3b0;margin:0;font-size:1rem}
+@media(max-width:900px){.dpc-wizard-progress{grid-template-columns:repeat(3,1fr)}}
+""")
