@@ -1,3 +1,11 @@
+## 4.0.6-dev — Sprint 1B Patch 06
+
+- Added Rekordbox XML Sync that preserves the uploaded Collection and existing playlists.
+- Added XML Health Check, original XML backup download, and missing-track report.
+- Added READY / NOT IN LIBRARY / PATH MISSING validation.
+- Added an in-app Rekordbox export/import tutorial and six-step setup checklist.
+- Kept M3U8 export as a universal local-playlist option.
+
 ## 4.0.5-dev — Sprint 1A Patch 05
 
 - EXPORT CENTER에 Rekordbox Playlist 내보내기 추가

@@ -777,3 +777,152 @@ def export_m3u8(set_df: pd.DataFrame) -> bytes:
         lines.append(f"#EXTINF:{duration},{label}")
         lines.append(_location_to_path(row.get("location")))
     return ("\ufeff" + "\n".join(lines) + "\n").encode("utf-8")
+
+
+def analyze_rekordbox_xml(data: bytes) -> dict[str, Any]:
+    """Inspect a Rekordbox XML document without modifying it."""
+    root = ET.fromstring(data)
+    collection = root.find("COLLECTION")
+    if collection is None:
+        collection = root.find(".//COLLECTION")
+    playlists_root = root.find("PLAYLISTS")
+    if playlists_root is None:
+        playlists_root = root.find(".//PLAYLISTS")
+    tracks = collection.findall("TRACK") if collection is not None else []
+    playlist_nodes = root.findall(".//PLAYLISTS//NODE[@Type='1']")
+    locations = [urllib.parse.unquote(t.attrib.get("Location", "")) for t in tracks if t.attrib.get("Location")]
+    folders: dict[str, int] = {}
+    for loc in locations:
+        path = _location_to_path(loc).replace("\\", "/")
+        if "/" in path:
+            folder = path.rsplit("/", 1)[0]
+            folders[folder] = folders.get(folder, 0) + 1
+    common_folder = max(folders, key=folders.get) if folders else ""
+    product = root.find("PRODUCT")
+    warnings: list[str] = []
+    if collection is None:
+        warnings.append("COLLECTION 노드를 찾지 못했습니다.")
+    if playlists_root is None:
+        warnings.append("PLAYLISTS 노드를 찾지 못했습니다.")
+    missing_locations = sum(1 for t in tracks if not clean_text(t.attrib.get("Location")))
+    if missing_locations:
+        warnings.append(f"로컬 경로가 없는 Collection 항목이 {missing_locations}곡 있습니다.")
+    return {
+        "valid": collection is not None and playlists_root is not None,
+        "xml_version": root.attrib.get("Version", ""),
+        "product_name": product.attrib.get("Name", "") if product is not None else "",
+        "product_version": product.attrib.get("Version", "") if product is not None else "",
+        "collection_count": len(tracks),
+        "playlist_count": len(playlist_nodes),
+        "music_folder": common_folder,
+        "missing_locations": missing_locations,
+        "warnings": warnings,
+    }
+
+
+def _collection_lookup(root: ET.Element) -> tuple[dict[str, ET.Element], dict[str, ET.Element], dict[tuple[str, str], ET.Element]]:
+    by_id: dict[str, ET.Element] = {}
+    by_location: dict[str, ET.Element] = {}
+    by_title_artist: dict[tuple[str, str], ET.Element] = {}
+    for track in root.findall(".//COLLECTION/TRACK"):
+        attrs = track.attrib
+        track_id = clean_text(attrs.get("TrackID"))
+        if track_id:
+            by_id[track_id] = track
+        location = clean_text(attrs.get("Location"))
+        if location:
+            normalized = urllib.parse.unquote(location).replace("\\", "/").lower()
+            by_location[normalized] = track
+            local = _location_to_path(location).replace("\\", "/").lower()
+            by_location[local] = track
+        key = (clean_text(attrs.get("Name")).casefold(), clean_text(attrs.get("Artist")).casefold())
+        if any(key):
+            by_title_artist.setdefault(key, track)
+    return by_id, by_location, by_title_artist
+
+
+def assess_rekordbox_sync(original_xml: bytes, set_df: pd.DataFrame) -> pd.DataFrame:
+    """Match set rows to tracks already present in the uploaded Rekordbox XML."""
+    root = ET.fromstring(original_xml)
+    by_id, by_location, by_title_artist = _collection_lookup(root)
+    rows: list[dict[str, Any]] = []
+    for pos, (_, row) in enumerate(set_df.iterrows(), start=1):
+        matched: ET.Element | None = None
+        track_id = clean_text(row.get("track_id"))
+        if track_id and track_id in by_id:
+            matched = by_id[track_id]
+        location = clean_text(row.get("location"))
+        if matched is None and location:
+            candidates = {
+                urllib.parse.unquote(location).replace("\\", "/").lower(),
+                _location_to_path(location).replace("\\", "/").lower(),
+                _location_to_uri(location).replace("\\", "/").lower(),
+            }
+            matched = next((by_location[x] for x in candidates if x in by_location), None)
+        if matched is None:
+            key = (clean_text(row.get("title")).casefold(), clean_text(row.get("artist")).casefold())
+            matched = by_title_artist.get(key)
+
+        if matched is not None:
+            matched_location = clean_text(matched.attrib.get("Location"))
+            if matched_location:
+                status, reason, include = "READY", "원본 Rekordbox Collection과 연결됨", True
+            else:
+                status, reason, include = "PATH MISSING", "Collection에는 있지만 로컬 파일 경로가 없습니다.", False
+            matched_id = clean_text(matched.attrib.get("TrackID"))
+        else:
+            status, reason, include = "NOT IN LIBRARY", "업로드한 Rekordbox XML Collection에서 곡을 찾지 못했습니다.", False
+            matched_id = ""
+        rows.append({
+            "order": int(row.get("order", pos) or pos),
+            "title": clean_text(row.get("title")),
+            "artist": clean_text(row.get("artist")),
+            "status": status,
+            "reason": reason,
+            "include": include,
+            "matched_track_id": matched_id,
+        })
+    return pd.DataFrame(rows)
+
+
+def sync_rekordbox_xml(original_xml: bytes, set_df: pd.DataFrame, playlist_name: str = "DPC DJ Set") -> bytes:
+    """Preserve an uploaded Rekordbox XML and add/replace one DPC SetLab playlist."""
+    root = ET.fromstring(original_xml)
+    assessment = assess_rekordbox_sync(original_xml, set_df)
+    track_ids = assessment.loc[assessment["include"], "matched_track_id"].astype(str).tolist()
+
+    playlists = root.find("PLAYLISTS")
+    if playlists is None:
+        playlists = root.find(".//PLAYLISTS")
+    if playlists is None:
+        playlists = ET.SubElement(root, "PLAYLISTS")
+    root_node = next((n for n in playlists.findall("NODE") if n.attrib.get("Name", "").upper() == "ROOT"), None)
+    if root_node is None:
+        root_node = ET.SubElement(playlists, "NODE", Type="0", Name="ROOT", Count="0")
+
+    folder = next((n for n in root_node.findall("NODE") if n.attrib.get("Type") == "0" and n.attrib.get("Name") == "DPC SetLab"), None)
+    if folder is None:
+        folder = ET.SubElement(root_node, "NODE", Type="0", Name="DPC SetLab", Count="0")
+
+    final_name = clean_text(playlist_name) or "DPC DJ Set"
+    for node in list(folder.findall("NODE")):
+        if node.attrib.get("Type") == "1" and node.attrib.get("Name") == final_name:
+            folder.remove(node)
+
+    playlist = ET.SubElement(folder, "NODE", Type="1", Name=final_name, KeyType="0", Entries=str(len(track_ids)))
+    for track_id in track_ids:
+        ET.SubElement(playlist, "TRACK", Key=track_id)
+
+    folder.set("Count", str(len(folder.findall("NODE"))))
+    root_node.set("Count", str(len(root_node.findall("NODE"))))
+    product = root.find("PRODUCT")
+    if product is not None:
+        product.set("Name", product.attrib.get("Name", "rekordbox"))
+    tree = ET.ElementTree(root)
+    try:
+        ET.indent(tree, space="  ")
+    except AttributeError:
+        pass
+    buffer = io.BytesIO()
+    tree.write(buffer, encoding="utf-8", xml_declaration=True)
+    return buffer.getvalue()

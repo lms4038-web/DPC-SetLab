@@ -8,6 +8,7 @@ import streamlit as st
 
 from dpc_core import (
     BuildSettings, ROLE_OPTIONS, ROLE_NORMAL, ROLE_START, ROLE_END, build_set, curve_value, export_set_csv, export_rekordbox_xml, export_m3u8, assess_rekordbox_export, filter_playlist,
+    analyze_rekordbox_xml, assess_rekordbox_sync, sync_rekordbox_xml,
     finalize_dataframe, format_seconds, parse_csv, parse_rekordbox_xml,
 )
 from dpc_insights import (
@@ -83,7 +84,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 4.0.5-dev", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 4.0.6-dev", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -93,11 +94,17 @@ def load_uploaded(name: str, data: bytes):
         st.session_state["raw_collection"] = collection
         st.session_state["playlists"] = playlists
         st.session_state["source_type"] = "xml"
+        st.session_state["rekordbox_xml_bytes"] = data
+        st.session_state["rekordbox_xml_name"] = name
+        st.session_state["rekordbox_xml_health"] = analyze_rekordbox_xml(data)
     elif name.lower().endswith(".csv"):
         collection = parse_csv(data)
         st.session_state["raw_collection"] = collection
         st.session_state["playlists"] = {}
         st.session_state["source_type"] = "csv"
+        st.session_state.pop("rekordbox_xml_bytes", None)
+        st.session_state.pop("rekordbox_xml_name", None)
+        st.session_state.pop("rekordbox_xml_health", None)
     else:
         raise ValueError("XML 또는 CSV 파일만 지원합니다.")
     st.session_state.pop("candidate_df", None)
@@ -221,6 +228,18 @@ with load_tab:
         raw = st.session_state["raw_collection"]
         playlists = st.session_state.get("playlists", {})
         st.success(f"Collection {len(raw):,}곡 · 플레이리스트 {len(playlists):,}개를 확인했습니다.")
+        health = st.session_state.get("rekordbox_xml_health")
+        if health:
+            st.markdown("#### XML Health Check")
+            h1, h2, h3, h4 = st.columns(4)
+            h1.metric("상태", "정상" if health.get("valid") else "확인 필요")
+            h2.metric("Collection", f"{health.get('collection_count', 0):,}곡")
+            h3.metric("Playlists", f"{health.get('playlist_count', 0):,}개")
+            h4.metric("경로 누락", f"{health.get('missing_locations', 0):,}곡")
+            if health.get("music_folder"):
+                st.caption(f"대표 음악 폴더: `{health['music_folder']}`")
+            for warning in health.get("warnings", []):
+                st.warning(warning)
 
         left, right = st.columns([1, 2])
         with left:
@@ -878,66 +897,95 @@ with spotify_tab:
 
 
     st.divider()
-    st.markdown("### 💿 Rekordbox Playlist")
-    st.caption("현재 세트의 곡 순서와 로컬 파일 경로를 이용해 Rekordbox용 플레이리스트 파일을 만듭니다.")
+    st.markdown("### 💿 Rekordbox XML Sync · ⭐ 추천")
+    st.caption("LIBRARY에서 불러온 원본 Rekordbox XML은 그대로 보존하고, 현재 세트 플레이리스트만 추가한 새 XML을 만듭니다.")
+
+    with st.expander("📖 Rekordbox XML 처음부터 끝까지 따라하기", expanded=False):
+        st.markdown("""
+#### A. Rekordbox에서 원본 XML 만들기
+1. Rekordbox를 **EXPORT 모드**로 실행합니다.
+2. 상단 메뉴에서 **File → Export Collection in xml format**을 선택합니다.
+3. 찾기 쉬운 위치에 `rekordbox.xml`로 저장합니다.
+4. DPC SetLab의 **LIBRARY** 탭에서 방금 만든 XML을 업로드합니다.
+
+#### B. DPC SetLab에서 세트 추가하기
+1. CANDIDATES와 PLANNER에서 세트를 완성합니다.
+2. 이 화면에서 플레이리스트 이름을 입력합니다.
+3. 검사 결과가 `READY`인 곡만 새 플레이리스트에 포함됩니다.
+4. **업데이트 XML 다운로드**와 **원본 백업 다운로드**를 모두 보관합니다.
+
+#### C. 수정된 XML을 Rekordbox에 적용하기
+1. Rekordbox에서 **Preferences → Advanced → Database**로 이동합니다.
+2. **rekordbox xml** 항목의 파일 경로에서 다운로드한 `*_updated.xml`을 지정합니다.
+3. Rekordbox 왼쪽 브라우저의 **rekordbox xml → DPC SetLab** 폴더를 펼칩니다.
+4. 새 플레이리스트를 우클릭해 **Import Playlist**를 선택합니다.
+5. 일반 **Playlists** 영역에 복사된 플레이리스트와 곡 연결 상태를 확인합니다.
+6. USB를 연결하고 해당 플레이리스트를 장치로 Export합니다.
+
+> XML 파일을 기존 파일 위에 직접 덮어쓰지 마세요. 문제가 있으면 원본 백업 XML을 다시 지정하면 됩니다.
+""")
+
+    original_xml = st.session_state.get("rekordbox_xml_bytes")
     if "set_df" not in st.session_state:
         st.info("먼저 PLANNER에서 세트를 생성하세요.")
+    elif not original_xml:
+        st.warning("Rekordbox XML Sync를 사용하려면 먼저 LIBRARY 탭에서 원본 Rekordbox XML을 업로드하세요. CSV나 샘플 세트만으로는 기존 Collection을 안전하게 유지할 수 없습니다.")
     else:
         rekordbox_set = st.session_state["set_df"]
-        export_check = assess_rekordbox_export(rekordbox_set)
-        ready_count = int(export_check["include"].sum()) if not export_check.empty else 0
-        missing_count = int((export_check["status"] == "PATH MISSING").sum()) if not export_check.empty else 0
-        streaming_count = int((export_check["status"] == "STREAMING ONLY").sum()) if not export_check.empty else 0
-        total_count = len(export_check)
+        sync_check = assess_rekordbox_sync(original_xml, rekordbox_set)
+        ready_count = int(sync_check["include"].sum()) if not sync_check.empty else 0
+        missing_count = int((sync_check["status"] == "PATH MISSING").sum()) if not sync_check.empty else 0
+        not_library_count = int((sync_check["status"] == "NOT IN LIBRARY").sum()) if not sync_check.empty else 0
+        total_count = len(sync_check)
 
         st.markdown("#### 다운로드 전 검사")
         q1, q2, q3, q4 = st.columns(4)
         q1.metric("전체 세트", f"{total_count}곡")
-        q2.metric("내보내기 가능", f"{ready_count}곡")
-        q3.metric("경로 없음", f"{missing_count}곡")
-        q4.metric("Spotify 전용", f"{streaming_count}곡")
+        q2.metric("READY", f"{ready_count}곡")
+        q3.metric("NOT IN LIBRARY", f"{not_library_count}곡")
+        q4.metric("PATH MISSING", f"{missing_count}곡")
         if ready_count < total_count:
-            st.warning(f"{total_count - ready_count}곡은 로컬 파일 경로가 없어 다운로드 파일에서 제외됩니다.")
+            st.warning(f"{total_count - ready_count}곡은 원본 Rekordbox Collection과 연결되지 않아 새 플레이리스트에서 제외됩니다.")
             with st.expander("누락되는 곡 보기"):
-                st.dataframe(
-                    export_check.loc[~export_check["include"], ["order", "artist", "title", "status", "reason"]],
-                    use_container_width=True, hide_index=True,
-                )
+                st.dataframe(sync_check.loc[~sync_check["include"], ["order", "artist", "title", "status", "reason"]], use_container_width=True, hide_index=True)
+                st.download_button("누락곡 CSV 다운로드", sync_check.loc[~sync_check["include"]].to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"), file_name="DPC_SetLab_missing_tracks.csv", mime="text/csv", use_container_width=True)
         else:
-            st.success("현재 세트의 모든 곡을 Rekordbox 파일로 내보낼 수 있습니다.")
+            st.success("현재 세트의 모든 곡이 원본 Rekordbox Collection과 연결되었습니다.")
 
         rekordbox_name = st.text_input("Rekordbox 플레이리스트 이름", value=default_playlist_name, key="rekordbox_playlist_name")
-        xml_data = export_rekordbox_xml(rekordbox_set, rekordbox_name)
+        updated_xml = sync_rekordbox_xml(original_xml, rekordbox_set, rekordbox_name)
         m3u8_data = export_m3u8(rekordbox_set)
         safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in (rekordbox_name.strip() or "DPC_DJ_Set")).strip().replace(" ", "_")
 
-        left, right = st.columns(2)
+        left, middle, right = st.columns(3)
         with left:
-            st.markdown("#### XML · ⭐ 추천")
-            st.info("Rekordbox에서 컬렉션과 플레이리스트로 불러오는 전용 형식입니다. 곡 순서, BPM·Key, 로컬 경로와 원본 XML에서 가져온 Cue 정보를 함께 담습니다.")
-            st.caption("추천 대상: Rekordbox에서 바로 공연용 플레이리스트를 만들고 USB Export까지 진행할 때")
-            st.download_button(
-                "Rekordbox XML 다운로드", xml_data,
-                file_name=f"{safe_name}.xml", mime="application/xml",
-                use_container_width=True, disabled=ready_count == 0,
-            )
+            st.markdown("#### 업데이트 XML")
+            st.info("기존 Collection과 기존 플레이리스트를 유지하고 `DPC SetLab` 폴더에 현재 세트를 추가합니다.")
+            st.download_button("업데이트 XML 다운로드", updated_xml, file_name=f"{safe_name}_updated.xml", mime="application/xml", use_container_width=True, disabled=ready_count == 0)
+        with middle:
+            st.markdown("#### 원본 백업")
+            st.info("문제가 생기면 Rekordbox의 XML 경로를 이 파일로 다시 지정해 원래 상태로 돌아갈 수 있습니다.")
+            original_name = st.session_state.get("rekordbox_xml_name", "rekordbox.xml")
+            backup_stem = Path(original_name).stem or "rekordbox"
+            st.download_button("원본 백업 다운로드", original_xml, file_name=f"{backup_stem}_backup.xml", mime="application/xml", use_container_width=True)
         with right:
-            st.markdown("#### M3U8 · 범용 호환")
-            st.info("곡의 재생 순서와 로컬 파일 경로만 담는 가벼운 플레이리스트입니다. Rekordbox 외에도 VLC, foobar2000 등 M3U8 지원 프로그램에서 활용하기 좋습니다.")
-            st.caption("추천 대상: 여러 음악 프로그램에서 같은 순서의 로컬 파일 목록을 함께 사용할 때")
-            st.download_button(
-                "M3U8 다운로드", m3u8_data,
-                file_name=f"{safe_name}.m3u8", mime="audio/x-mpegurl",
-                use_container_width=True, disabled=ready_count == 0,
-            )
+            st.markdown("#### M3U8 · 범용")
+            st.info("READY 곡의 재생 순서와 로컬 파일 경로만 저장합니다. VLC 등에서도 사용할 수 있습니다.")
+            st.download_button("M3U8 다운로드", m3u8_data, file_name=f"{safe_name}.m3u8", mime="audio/x-mpegurl", use_container_width=True, disabled=ready_count == 0)
 
-        st.markdown("""
-**가져오기 안내**  
-- **XML:** Rekordbox 환경설정의 `Advanced → Database → rekordbox xml`에서 파일을 지정한 뒤, 왼쪽 `rekordbox xml` 영역의 플레이리스트를 Rekordbox `Playlists`로 가져옵니다.  
-- **M3U8:** Rekordbox의 플레이리스트 가져오기 기능 또는 M3U8을 지원하는 다른 플레이어에서 엽니다. 파일이 이동되면 경로를 찾지 못할 수 있으므로 음원 위치를 유지하세요.
+        st.markdown("#### Rekordbox 적용 체크리스트")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.checkbox("업데이트 XML을 다운로드했다", key="wizard_downloaded")
+            st.checkbox("Preferences → Advanced → Database를 열었다", key="wizard_database")
+            st.checkbox("rekordbox xml 경로를 업데이트 XML로 지정했다", key="wizard_selected")
+        with c2:
+            st.checkbox("rekordbox xml → DPC SetLab을 확인했다", key="wizard_found")
+            st.checkbox("새 플레이리스트에서 Import Playlist를 실행했다", key="wizard_imported")
+            st.checkbox("일반 Playlists에서 곡을 확인했다", key="wizard_verified")
 
-Spotify에서 찾은 곡은 스트리밍 링크만으로 로컬 Rekordbox 파일이 되지 않습니다. 해당 곡의 정식 음원 파일을 준비하고 Rekordbox에 추가한 뒤 다시 XML을 불러오면 포함할 수 있습니다.
-""")
+        done = sum(bool(st.session_state.get(k)) for k in ["wizard_downloaded", "wizard_database", "wizard_selected", "wizard_found", "wizard_imported", "wizard_verified"])
+        st.progress(done / 6, text=f"Rekordbox Setup {done} / 6")
 
 with coach_tab:
     st.subheader("AI 코치 · 다음 곡 추천")
@@ -1083,7 +1131,7 @@ with settings_tab:
     s1, s2, s3 = st.columns(3)
     s1.metric("Spotify", "Connected" if token else "Not connected")
     s2.metric("Last.fm", "Configured" if lastfm_api_key else "Not configured")
-    s3.metric("DPC SetLab", "v4.0.5-dev")
+    s3.metric("DPC SetLab", "v4.0.6-dev")
     st.info("Streamlit Cloud에서는 config/settings.json 대신 App settings → Secrets에 키를 저장해야 재부팅 후에도 유지됩니다.")
     st.code('''[spotify]
 client_id = "YOUR_CLIENT_ID"
