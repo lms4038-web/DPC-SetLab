@@ -1,3 +1,11 @@
+# v5.0.1 Wizard Hotfix
+
+- Fixed v5 Wizard CSS being rendered as visible source text.
+- Spotify hosted OAuth now opens in the current tab instead of a new tab.
+- After Spotify callback, onboarding automatically enters the workspace and requests Library.
+- Restored styled workflow progress and wizard cards.
+- Hardened automatic top-tab navigation for Library/Candidates/Generate/Edit/Export.
+
 ## 5.0.0 · Wizard Experience
 
 - Home을 단계 안내 전용 Wizard 화면으로 단순화

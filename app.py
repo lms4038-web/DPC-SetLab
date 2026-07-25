@@ -45,23 +45,35 @@ def request_tab(target: str) -> None:
     st.session_state["wizard_target_tab"] = target
 
 def apply_requested_tab() -> None:
+    """Select a Streamlit tab requested during the previous rerun."""
     target = st.session_state.pop("wizard_target_tab", None)
     if not target:
         return
     label = TAB_LABELS.get(target, target).upper()
     components.html(
         f"""<script>
-        const wanted = {label!r};
-        const clickTarget = () => {{
-          const doc = window.parent.document;
-          const tabs = [...doc.querySelectorAll('button[data-baseweb="tab"]')];
-          const match = tabs.find(el => (el.innerText || '').toUpperCase().includes(wanted));
-          if (match) {{ match.click(); match.scrollIntoView({{block:'nearest', inline:'center'}}); return true; }}
-          return false;
-        }};
-        if (!clickTarget()) {{ setTimeout(clickTarget, 120); setTimeout(clickTarget, 450); }}
+        (() => {{
+          const wanted = {label!r};
+          let attempts = 0;
+          const selectTab = () => {{
+            attempts += 1;
+            try {{
+              const doc = window.parent.document;
+              const tabs = [...doc.querySelectorAll('[role="tab"], button[data-baseweb="tab"]')];
+              const match = tabs.find(el => (el.textContent || '').trim().toUpperCase().includes(wanted));
+              if (match) {{
+                match.dispatchEvent(new MouseEvent('mousedown', {{bubbles:true, view:window.parent}}));
+                match.click();
+                match.scrollIntoView({{block:'nearest', inline:'center'}});
+                return;
+              }}
+            }} catch (err) {{ console.debug('DPC tab navigation retry', err); }}
+            if (attempts < 20) window.setTimeout(selectTab, 100);
+          }};
+          selectTab();
+        }})();
         </script>""",
-        height=0,
+        height=1,
     )
 
 SAMPLE_XML = Path("samples/sample_rekordbox.xml")
@@ -119,7 +131,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 5.0.0", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 5.0.1", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -263,7 +275,10 @@ if not workspace_entered:
     elif is_web_spotify:
         oauth_url = st.session_state.get("spotify_oauth_url")
         if oauth_url:
-            st.link_button("Spotify 계정 연결", oauth_url, type="primary", use_container_width=True)
+            st.markdown(
+                f'<a class="dpc-oauth-self" href="{oauth_url}" target="_self">Spotify 계정 연결</a>',
+                unsafe_allow_html=True,
+            )
         else:
             st.warning("OAuth State Secret을 Settings 또는 Streamlit Secrets에 설정해야 합니다.")
     else:
@@ -318,7 +333,10 @@ with home_tab:
         elif is_web_spotify:
             oauth_url = st.session_state.get("spotify_oauth_url")
             if oauth_url:
-                st.link_button("Spotify 연결", oauth_url, type="primary", use_container_width=True)
+                st.markdown(
+                    f'<a class="dpc-oauth-self" href="{oauth_url}" target="_self">Spotify 연결</a>',
+                    unsafe_allow_html=True,
+                )
             else:
                 st.warning("OAuth State Secret을 SETTINGS 또는 Streamlit Secrets에 설정해주세요.")
         else:
