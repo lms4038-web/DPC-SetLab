@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from dpc_core import (
     BuildSettings, ROLE_OPTIONS, ROLE_NORMAL, ROLE_START, ROLE_END, build_set, curve_value, export_set_csv, export_rekordbox_xml, export_m3u8, assess_rekordbox_export, filter_playlist,
@@ -28,6 +29,40 @@ from spotify_client import (
     exchange_web_code, get_valid_token, get_valid_token_data, match_set, search_manual_tracks, verify_web_state,
     reset_token, test_spotify_connection,
 )
+
+
+
+TAB_LABELS = {
+    "home": "HOME",
+    "library": "LIBRARY",
+    "candidates": "CANDIDATES",
+    "generate": "GENERATE",
+    "edit": "EDIT",
+    "export": "EXPORT",
+}
+
+def request_tab(target: str) -> None:
+    st.session_state["wizard_target_tab"] = target
+
+def apply_requested_tab() -> None:
+    target = st.session_state.pop("wizard_target_tab", None)
+    if not target:
+        return
+    label = TAB_LABELS.get(target, target).upper()
+    components.html(
+        f"""<script>
+        const wanted = {label!r};
+        const clickTarget = () => {{
+          const doc = window.parent.document;
+          const tabs = [...doc.querySelectorAll('button[data-baseweb="tab"]')];
+          const match = tabs.find(el => (el.innerText || '').toUpperCase().includes(wanted));
+          if (match) {{ match.click(); match.scrollIntoView({{block:'nearest', inline:'center'}}); return true; }}
+          return false;
+        }};
+        if (!clickTarget()) {{ setTimeout(clickTarget, 120); setTimeout(clickTarget, 450); }}
+        </script>""",
+        height=0,
+    )
 
 SAMPLE_XML = Path("samples/sample_rekordbox.xml")
 SAMPLE_CSV = Path("samples/sample_tracks.csv")
@@ -84,7 +119,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 4.0.8-dev", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 4.0.9-dev", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -201,6 +236,14 @@ if not workspace_entered:
         st.caption("처음 사용한다면 ‘시작하기’를 눌러 Spotify 연결부터 진행하세요.")
         st.stop()
 
+    # Spotify OAuth가 끝났다면 중간 진행표를 보여주지 않고 Library로 바로 이동합니다.
+    if token:
+        st.session_state["workspace_entered"] = True
+        st.session_state["home_wizard_started"] = True
+        st.session_state["wizard_mode"] = True
+        request_tab("library")
+        st.rerun()
+
     st.markdown('<div class="dpc-onboarding-stage">', unsafe_allow_html=True)
     st.markdown("#### STEP 1 · Spotify 연결")
     st.caption("음악 검색과 Export를 위해 Spotify를 먼저 연결합니다. Rekordbox 기능만 살펴보려면 건너뛸 수 있습니다.")
@@ -237,13 +280,15 @@ if not workspace_entered:
         if st.button("다음 · Rekordbox XML", type="primary", use_container_width=True, disabled=not bool(token), key="landing_continue"):
             st.session_state["workspace_entered"] = True
             st.session_state["home_wizard_started"] = True
-            st.session_state["onboarding_hint"] = "library"
+            st.session_state["wizard_mode"] = True
+            request_tab("library")
             st.rerun()
     with n2:
         if st.button("Spotify 없이 둘러보기", use_container_width=True, key="landing_continue_without_spotify"):
             st.session_state["workspace_entered"] = True
             st.session_state["home_wizard_started"] = True
-            st.session_state["onboarding_hint"] = "library"
+            st.session_state["wizard_mode"] = True
+            request_tab("library")
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
@@ -257,6 +302,7 @@ with st.sidebar:
 home_tab, load_tab, online_tab, build_tab, edit_tab, spotify_tab, coach_tab, history_tab, settings_tab, guide_tab = st.tabs([
     "⌂ HOME", "♫ LIBRARY", "✦ CANDIDATES", "＋ GENERATE", "✎ EDIT", "⇧ EXPORT", "AI ASSISTANT", "▥ ANALYTICS", "⚙ SETTINGS", "? HELP"
 ])
+apply_requested_tab()
 
 with home_tab:
     render_home(
@@ -296,8 +342,9 @@ with home_tab:
         q1, q2 = st.columns(2)
         with q1:
             if st.button("다음 단계 · LIBRARY", use_container_width=True, disabled=not bool(token)):
-                st.session_state["onboarding_hint"] = "library"
-                st.info("상단 LIBRARY 탭을 눌러 Rekordbox XML을 업로드하세요.")
+                st.session_state["wizard_mode"] = True
+                request_tab("library")
+                st.rerun()
         with q2:
             if st.button("처음부터 다시 안내", use_container_width=True):
                 st.session_state["show_first_run"] = True
@@ -431,6 +478,9 @@ with load_tab:
             st.session_state.pop("set_df", None)
             st.session_state.pop("spotify_matches", None)
             st.success(f"{selected_playlist}에서 후보곡 {int(updated['use'].sum())}곡을 저장했습니다.")
+            if st.session_state.get("wizard_mode"):
+                request_tab("candidates")
+                st.rerun()
         elif st.session_state.get("candidate_selection_signature") != selection_signature:
             st.session_state["candidate_df"] = candidate
             st.session_state["candidate_source_playlist"] = selected_playlist
@@ -488,6 +538,12 @@ with online_tab:
             view_cols = [c for c in ["title", "artist", "bpm", "camelot", "genre", "online_tags_text", "release_year", "spotify_popularity", "lastfm_listeners", "online_sources_text", "online_status"] if c in enriched_view.columns]
             st.dataframe(enriched_view[view_cols], use_container_width=True, hide_index=True)
             st.caption("온라인 태그는 장르 필터와 AI 코치의 보조 신호로 활용할 수 있으며, BPM·Key 충돌 시에는 Rekordbox 값이 항상 우선됩니다.")
+
+        if st.session_state.get("wizard_mode"):
+            st.markdown("---")
+            if st.button("다음 · Generate", type="primary", use_container_width=True, key="wizard_candidates_next"):
+                request_tab("generate")
+                st.rerun()
 
 with build_tab:
     st.subheader("세트 전개 설정")
@@ -676,6 +732,9 @@ with build_tab:
                 st.session_state["selected_genres"] = selected_genres
                 st.session_state.pop("spotify_matches", None)
                 st.success("세트를 만들었습니다.")
+                if st.session_state.get("wizard_mode"):
+                    request_tab("edit")
+                    st.rerun()
             except Exception as exc:
                 st.error(str(exc))
 
@@ -814,6 +873,9 @@ with edit_tab:
                 st.session_state["set_df"] = updated
                 st.session_state["set_edit_complete"] = True
                 st.success("편집 내용을 저장했습니다. EXPORT에서 내보낼 수 있습니다.")
+                if st.session_state.get("wizard_mode"):
+                    request_tab("export")
+                    st.rerun()
         with c2:
             st.download_button("검토용 CSV 다운로드", export_set_csv(result), file_name="DPC_SetLab_Edit_Review.csv", mime="text/csv", use_container_width=True)
         st.markdown("### 검토 체크리스트")

@@ -40,22 +40,20 @@ def _workflow_statuses(*, spotify_connected: bool, xml_loaded: bool, set_ready: 
 
 
 def _progress_html(statuses: list[bool], current_step: int) -> str:
+    """Return compact HTML without Markdown indentation leaks."""
     rows: list[str] = []
     for index, ((label, description), complete) in enumerate(zip(WORKFLOW_STEPS, statuses), start=1):
         state_class = "done" if complete else ("current" if index == current_step else "pending")
         icon = "✓" if complete else (str(index) if index == current_step else "○")
+        state_label = "완료" if complete else ("진행할 단계" if index == current_step else "대기")
         rows.append(
-            f"""
-            <div class="dpc-home-progress-row {state_class}">
-              <div class="dpc-home-progress-icon">{icon}</div>
-              <div class="dpc-home-progress-copy">
-                <b>{label}</b><span>{description}</span>
-              </div>
-              <div class="dpc-home-progress-state">{'완료' if complete else ('진행할 단계' if index == current_step else '대기')}</div>
-            </div>
-            """
+            f'<div class="dpc-home-progress-row {state_class}">'
+            f'<div class="dpc-home-progress-icon">{icon}</div>'
+            f'<div class="dpc-home-progress-copy"><b>{label}</b><span>{description}</span></div>'
+            f'<div class="dpc-home-progress-state">{state_label}</div>'
+            f'</div>'
         )
-    return '<div class="dpc-home-progress">' + "".join(rows) + "</div>"
+    return '<div class="dpc-home-progress">' + ''.join(rows) + '</div>'
 
 
 

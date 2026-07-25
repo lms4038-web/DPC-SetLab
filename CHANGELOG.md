@@ -107,3 +107,11 @@
 - 현재 진행 상황을 Spotify / Rekordbox XML / AI Set / Edit / Export 5단계로 표시
 - 첫 사용자용 대형 `시작하기` 버튼과 단계별 Quick Start 안내 추가
 - 시작 전에는 Spotify 설정 영역을 숨겨 첫 화면의 정보 밀도를 낮춤
+
+## 4.0.9-dev · Sprint 2 · Patch 09
+- Fixed raw HTML appearing in the Home progress list.
+- Spotify OAuth completion now advances directly to Library.
+- Added guided tab transitions: Library → Candidates → Generate → Edit.
+- Candidate save advances to Candidates in wizard mode.
+- Generate completion advances to Edit in wizard mode.
+- Added a Candidates → Generate continuation action.
