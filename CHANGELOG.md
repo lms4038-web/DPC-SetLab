@@ -1,5 +1,23 @@
 # Changelog
 
+## 4.0.8-dev · Sprint 2 · Patch 08
+
+### First-run Landing / Information Architecture Reset
+
+- Added a true isolated landing page before the workspace loads.
+- The first screen no longer renders the sidebar, navigation tabs, dashboard cards, analytics, or system checks.
+- Added a single primary `시작하기` action and a secondary `기존 작업 공간 열기` action.
+- Added Spotify-first onboarding directly on the landing flow.
+- Added a `Spotify 없이 둘러보기` path for Rekordbox-only evaluation.
+- Added a five-step visual path: Spotify → Library → Generate → Edit → Export.
+- Added `첫 시작 화면 다시 보기` in Settings.
+- Preserved the existing Patch 07 workspace and all Patch 06 XML Sync/backup/health-check behavior.
+
+### Validation
+
+- Python syntax compilation passed.
+- Existing automated tests: 23 passed.
+
 ## 4.0.7-dev · Sprint 2 · Patch 07
 
 ### UX Overhaul

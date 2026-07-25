@@ -20,7 +20,7 @@ from playlist_intelligence import diagnose_playlist, display_playlist_path, play
 from performance_planner import PerformancePlanSettings, apply_performance_plan
 from settings_manager import load_settings, save_settings
 from ui.design_system import apply_design_system
-from ui.home import render_home
+from ui.home import render_first_run_landing, render_home
 from ui.sidebar import render_session_snapshot, render_set_player, render_sidebar_footer, render_sidebar_header
 
 from spotify_client import (
@@ -84,7 +84,7 @@ PRESET_CONFIGS = {
     },
 }
 
-st.set_page_config(page_title="DPC SetLab 4.0.7-dev", page_icon="◈", layout="wide")
+st.set_page_config(page_title="DPC SetLab 4.0.8-dev", page_icon="◈", layout="wide")
 apply_design_system()
 
 
@@ -180,6 +180,73 @@ if is_web_spotify and client_id and not token and oauth_state_secret:
     st.session_state["spotify_oauth_url"] = build_web_authorization(
         client_id, redirect_uri, oauth_state_secret
     )["url"]
+
+# Patch 08: true first-run experience. Until the user enters the workspace,
+# no sidebar, tab bar, dashboard cards, or advanced modules are rendered.
+workspace_entered = bool(st.session_state.get("workspace_entered", False))
+if not workspace_entered:
+    render_first_run_landing(spotify_connected=bool(token))
+
+    if not st.session_state.get("landing_started", False):
+        c1, c2 = st.columns([1.35, 1])
+        with c1:
+            if st.button("시작하기", type="primary", use_container_width=True, key="landing_start"):
+                st.session_state["landing_started"] = True
+                st.rerun()
+        with c2:
+            if st.button("기존 작업 공간 열기", use_container_width=True, key="landing_skip"):
+                st.session_state["workspace_entered"] = True
+                st.session_state["home_wizard_started"] = True
+                st.rerun()
+        st.caption("처음 사용한다면 ‘시작하기’를 눌러 Spotify 연결부터 진행하세요.")
+        st.stop()
+
+    st.markdown('<div class="dpc-onboarding-stage">', unsafe_allow_html=True)
+    st.markdown("#### STEP 1 · Spotify 연결")
+    st.caption("음악 검색과 Export를 위해 Spotify를 먼저 연결합니다. Rekordbox 기능만 살펴보려면 건너뛸 수 있습니다.")
+
+    if token:
+        st.success("Spotify 연결이 완료되었습니다.")
+    elif not client_id:
+        st.warning("Spotify Client ID가 설정되지 않았습니다. 아래에서 빠르게 입력하거나 Spotify 없이 작업 공간을 열 수 있습니다.")
+        with st.expander("Spotify 빠른 설정", expanded=True):
+            quick_client_id = st.text_input("Spotify Client ID", value="", key="landing_client_id")
+            quick_redirect = st.text_input("Redirect URI", value=redirect_uri, key="landing_redirect_uri")
+            if st.button("설정 저장", use_container_width=True, key="landing_save_spotify"):
+                settings.setdefault("spotify", {})["client_id"] = quick_client_id.strip()
+                settings["spotify"]["redirect_uri"] = quick_redirect.strip()
+                save_settings(settings)
+                st.success("저장했습니다. 앱을 새로고침하면 연결 버튼이 활성화됩니다.")
+    elif is_web_spotify:
+        oauth_url = st.session_state.get("spotify_oauth_url")
+        if oauth_url:
+            st.link_button("Spotify 계정 연결", oauth_url, type="primary", use_container_width=True)
+        else:
+            st.warning("OAuth State Secret을 Settings 또는 Streamlit Secrets에 설정해야 합니다.")
+    else:
+        if st.button("Spotify 계정 연결", type="primary", use_container_width=True, key="landing_spotify_connect"):
+            try:
+                with st.spinner("브라우저에서 Spotify 접근을 승인해주세요."):
+                    authorize(client_id)
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    n1, n2 = st.columns([1.35, 1])
+    with n1:
+        if st.button("다음 · Rekordbox XML", type="primary", use_container_width=True, disabled=not bool(token), key="landing_continue"):
+            st.session_state["workspace_entered"] = True
+            st.session_state["home_wizard_started"] = True
+            st.session_state["onboarding_hint"] = "library"
+            st.rerun()
+    with n2:
+        if st.button("Spotify 없이 둘러보기", use_container_width=True, key="landing_continue_without_spotify"):
+            st.session_state["workspace_entered"] = True
+            st.session_state["home_wizard_started"] = True
+            st.session_state["onboarding_hint"] = "library"
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
 
 with st.sidebar:
     render_sidebar_header()
@@ -1123,6 +1190,11 @@ with history_tab:
             st.error(str(exc))
 
 with settings_tab:
+    if st.button("첫 시작 화면 다시 보기", use_container_width=True, key="reset_first_run_landing"):
+        st.session_state["workspace_entered"] = False
+        st.session_state["landing_started"] = False
+        st.rerun()
+    st.caption("온보딩 랜딩 화면과 Spotify-first 시작 흐름을 다시 확인할 수 있습니다.")
     st.subheader("⚙️ Settings")
     st.caption("연결 상태와 API 정보는 이곳에서만 관리합니다. 로컬 설정은 config/settings.json에 저장되며 GitHub에는 업로드되지 않습니다.")
 

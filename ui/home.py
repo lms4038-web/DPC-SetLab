@@ -58,8 +58,45 @@ def _progress_html(statuses: list[bool], current_step: int) -> str:
     return '<div class="dpc-home-progress">' + "".join(rows) + "</div>"
 
 
+
+def render_first_run_landing(*, spotify_connected: bool) -> None:
+    """Render Patch 08's isolated first-run landing page.
+
+    This page intentionally contains no dashboard, sidebar, tabs, analytics, or
+    system tables. It exists only to explain the product and start onboarding.
+    """
+    status_label = "SPOTIFY CONNECTED" if spotify_connected else "READY TO START"
+    status_class = "connected" if spotify_connected else "ready"
+    st.markdown(
+        f"""
+        <main class="dpc-first-run">
+          <div class="dpc-first-run-orbit orbit-one"></div>
+          <div class="dpc-first-run-orbit orbit-two"></div>
+          <div class="dpc-first-run-content">
+            <div class="dpc-first-run-brand">DPC <span>SETLAB</span></div>
+            <div class="dpc-first-run-kicker">AI DJ PERFORMANCE ASSISTANT</div>
+            <h1>공연용 DJ 세트를<br><em>한 흐름으로 완성하세요.</em></h1>
+            <p>Spotify 연결부터 Rekordbox XML, AI 세트 생성, 검토와 Export까지.<br>처음 사용하는 DJ도 순서대로 따라갈 수 있습니다.</p>
+            <div class="dpc-first-run-status {status_class}"><i></i>{status_label}</div>
+          </div>
+        </main>
+        <section class="dpc-first-run-flow">
+          <div><b>01</b><span>Spotify</span><small>계정 연결</small></div>
+          <div class="arrow">→</div>
+          <div><b>02</b><span>Library</span><small>XML 업로드</small></div>
+          <div class="arrow">→</div>
+          <div><b>03</b><span>Generate</span><small>AI 세트 생성</small></div>
+          <div class="arrow">→</div>
+          <div><b>04</b><span>Edit</span><small>공연 전 검토</small></div>
+          <div class="arrow">→</div>
+          <div><b>05</b><span>Export</span><small>Rekordbox·Spotify</small></div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def render_home(*, spotify_connected: bool, lastfm_configured: bool, xml_loaded: bool, set_ready: bool) -> None:
-    """Render the dedicated first-run landing page for Patch 07."""
+    """Render the contextual workspace home for Patch 08."""
     statuses = _workflow_statuses(
         spotify_connected=spotify_connected,
         xml_loaded=xml_loaded,
@@ -72,7 +109,7 @@ def render_home(*, spotify_connected: bool, lastfm_configured: bool, xml_loaded:
     st.markdown(
         """
         <section class="dpc-home-landing">
-          <div class="dpc-home-eyebrow">PROJECT ORCHESTRA · PATCH 07</div>
+          <div class="dpc-home-eyebrow">PROJECT ORCHESTRA · PATCH 08</div>
           <div class="dpc-home-logo">🎧</div>
           <h1>DPC SetLab</h1>
           <h2>AI DJ Performance Assistant</h2>

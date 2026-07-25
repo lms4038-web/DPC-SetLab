@@ -1,3 +1,7 @@
+# DPC SetLab 4.0.8-dev
+
+> Patch 08은 앱 최초 실행 시 대시보드보다 먼저 독립형 랜딩 화면을 표시합니다. 시작하기를 누르기 전에는 상단 탭과 사이드바가 나타나지 않습니다.
+
 > 현재 빌드: **4.0.0-dev Sprint 1A** — 디자인 시스템, 신규 Home, UI 모듈화
 
 # DPC SetLab 4.0-dev · Project ORCHESTRA 2.2
